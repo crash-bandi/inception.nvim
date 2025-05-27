@@ -1,14 +1,23 @@
 local Workspace = require("inception.workspace")
 local Config = require("inception.config")
+local Utils = require("inception.utils")
+
+---@class Inception.WorkspaceAttachment
+---@field type "tab" | "win"
+---@field id number
 
 ---@class Inception.Manager
+---@field workspaces Inception.Workspace[]
+---@field name_map table
+---@field active_workspace number
+---@field attached_workspaces number[]
 local Manager = {}
 Manager.__index = Manager
 Manager.workspaces = {}
 Manager.name_map = {}
 
-Manager.current_workspace = nil
-Manager.active_workspaces = {}
+Manager.active_workspace = nil
+Manager.attached_workspaces = {}
 
 function Manager:get_next_available_id()
 	local id = 1
@@ -19,16 +28,26 @@ function Manager:get_next_available_id()
 end
 
 ---@param name string
+---@param dirs? table
 ---@return Inception.Workspace
-function Manager:create_workspace(name)
+function Manager:create_workspace(name, dirs)
 	if self:workspace_name_exists(name) then
 		error("Workspace '" .. name .. "' already exists", vim.log.levels.ERROR)
+	end
+
+	dirs = dirs or { vim.fn.getcwd() }
+
+	for _, dir in ipairs(dirs) do
+		if not Utils.is_valid_directory(dir) then
+			error("Invalid directory: " .. dir)
+		end
 	end
 
 	local id = self:get_next_available_id()
 	local workspace = Workspace.new({
 		id = id,
 		name = name,
+		root_dirs = dirs,
 	})
 
 	self.workspaces[id] = workspace
@@ -83,7 +102,7 @@ function Manager:rename_workspace(new_name, wsid)
 		workspace = self:get_workspace(wsid)
 	end
 
-	workspace = workspace or self.current_workspace
+	workspace = workspace or self.active_workspace
 
 	if workspace == nil then
 		error("No active workspace detected, and none provided", vim.log.levels.ERROR)
@@ -98,19 +117,89 @@ function Manager:rename_workspace(new_name, wsid)
 end
 
 ---@param wsid number
-function Manager:open_workspace(wsid)
+function Manager:set_workspace_active(wsid)
 	local workspace = self:get_workspace(wsid)
-	local open_mode = workspace.options.open_mode or Config.options.default_open_mode
-
-	if open_mode == "tab" then
-		vim.cmd("tabnew")
-	elseif open_mode == "win" then
-		vim.cmd("new")
-	end
-
-  self.current_workspace = workspace.id
+	self.active_workspace = workspace.id
 end
 
-function Manager:attach_workspace(wsid) end
+---@param wsid number
+---@param mode? string
+function Manager:open_workspace(wsid, mode)
+	local workspace = self:get_workspace(wsid)
+	local open_mode = mode or workspace.options.open_mode or Config.options.default_open_mode
+
+	local target_id = nil
+	if open_mode == "tab" then
+		vim.cmd("tabnew")
+		target_id = vim.api.nvim_get_current_tagpage()
+	elseif open_mode == "win" then
+		vim.cmd("new")
+		target_id = vim.api.nvim_get_current_win()
+	else
+		error("Invalid workspace open mode: " .. mode, vim.log.levels.ERROR)
+	end
+
+	self:attach_workspace(workspace.id, open_mode, target_id)
+end
+
+---@param wsid number
+function Manager:close_workspace(wsid)
+	local workspace = self:get_workspace(wsid)
+	local attachment = workspace.attachment
+
+	if not attachment then
+		return
+	end
+
+	if attachment.type == "tab" then
+		if #vim.api.nvim_list_tabpages() > 1 then
+			local current_tabpage = vim.api.nvim_get_current_tabpage()
+			if current_tabpage ~= attachment.id then
+				vim.api.nvim_set_current_tabpage(attachment.id)
+				vim.cmd("tablose")
+				vim.api.nvim_set_current_tabpage(current_tabpage)
+			end
+		end
+		self:detach_workspace(wsid)
+	elseif attachment.type == "win" then
+		error("NOT IMPLEMENTED")
+	else
+		error("Internal error: close workspace with unknown attachment type.")
+	end
+end
+
+---@param wsid number
+---@param target_type string
+---@param target_id number
+function Manager:attach_workspace(wsid, target_type, target_id)
+	local workspace = self:get_workspace(wsid)
+
+	---@type Inception.WorkspaceAttachment
+	local attachment = {
+		type = target_type,
+		id = target_id,
+	}
+
+	workspace.attachment = attachment
+	table.insert(self.attached_workspaces, workspace.id)
+end
+
+---@param wsid number
+function Manager:detach_workspace(wsid)
+	local workspace = self:get_workspace(wsid)
+
+	workspace.attachment = nil
+
+	if self.active_workspace == workspace.id then
+		self.active_workspace = nil
+	end
+
+	for i, id in ipairs(self.attached_workspaces) do
+		if id == workspace.id then
+			table.remove(self.attached_workspaces, i)
+			break
+		end
+	end
+end
 
 return Manager
