@@ -1,14 +1,21 @@
 local Utils = require("inception.utils")
 
+---@class Inception.RootDir
+---@field raw string user provided
+---@field absolute string expanded to absolute
+---@field safe string vim escaped
+
 ---@class Inception.Workspace
----@field id number
----@field name string
+---@field id number unique id
+---@field name string unique name
 ---@field root_dirs Inception.RootDir[]
----@field attachment Inception.WorkspaceAttachment
----@field multi_root boolean
 ---@field options table
----@field options.open_mode string
----@field options.multi_root_mode string
+---@field options.open_mode "tab" | "win"
+---@field options.multi_root_mode "virtual" | "select" | "disabled"
+---@field attachment Inception.WorkspaceAttachment
+---@field current_working_directory Inception.RootDir
+---@field multi_root boolean
+---@field buffers number[]
 local Workspace = {
 	root_dirs = {},
 	options = {
@@ -71,6 +78,7 @@ function Workspace:remove_root_dir(dir)
 	end
 end
 
+---@param dir string
 function Workspace:set_directory(dir)
 	if not Utils.is_valid_directory(dir) then
 		error("Invalid directory: " .. dir)
@@ -80,6 +88,24 @@ function Workspace:set_directory(dir)
 
 	self.root_dirs = { entry }
 	self:update_multi_root_flag()
+
+	self:select_directory(entry)
+end
+
+---@param root_dir Inception.RootDir
+function Workspace:select_directory(root_dir)
+	self.current_working_directory = root_dir
+	self:sync_cwd()
+end
+
+function Workspace:sync_cwd()
+	if self.attachment.type == "tab" then
+		vim.cmd("tcd " .. self.current_working_directory.safe)
+	elseif self.attachment.type == "win" then
+		vim.cmd("lcd " .. self.current_working_directory.safe)
+	else
+		error("Internal error: Unknown attachment type: " .. self.attachment.type)
+	end
 end
 
 function Workspace:update_multi_root_flag()

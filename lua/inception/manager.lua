@@ -174,6 +174,10 @@ end
 function Manager:attach_workspace(wsid, target_type, target_id)
 	local workspace = self:get_workspace(wsid)
 
+	if workspace.attachment then
+		self:detach_workspace(workspace.id)
+	end
+
 	---@type Inception.WorkspaceAttachment
 	local attachment = {
 		type = target_type,
@@ -181,6 +185,18 @@ function Manager:attach_workspace(wsid, target_type, target_id)
 	}
 
 	workspace.attachment = attachment
+	workspace.buffers = {}
+
+	if target_type == "tab" then
+		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
+			table.insert(workspace.buffers, vim.api.nvim_win_get_buf(win))
+		end
+	elseif target_type == "win" then
+		table.insert(workspace.buffers, vim.api.nvim_getu_current_win())
+	else
+		error("Invalid attachment type: " .. target_type)
+	end
+
 	table.insert(self.attached_workspaces, workspace.id)
 end
 
@@ -189,9 +205,10 @@ function Manager:detach_workspace(wsid)
 	local workspace = self:get_workspace(wsid)
 
 	workspace.attachment = nil
+	workspace.buffers = nil
 
 	if self.active_workspace == workspace.id then
-		self.active_workspace = nil
+		self:exit_workspace(workspace.id)
 	end
 
 	for i, id in ipairs(self.attached_workspaces) do
@@ -199,6 +216,40 @@ function Manager:detach_workspace(wsid)
 			table.remove(self.attached_workspaces, i)
 			break
 		end
+	end
+end
+
+---@param wsid number
+function Manager:enter_workspace(wsid)
+	local workspace = self:get_workspace(wsid)
+
+	self:set_workspace_active(workspace.id)
+	workspace:sync_cwd()
+end
+
+---@param wsid number
+function Manager:exit_workspace(wsid)
+	local workspace = self:get_workspace(wsid)
+	self.active_workspace = nil
+end
+
+---@param wsid number
+function Manager:focus_on_workspace(wsid)
+	local workspace = self:get_workspace(wsid)
+
+	if workspace.attachment then
+		if workspace.attachment.type == "tab" then
+			vim.api.nvim_set_current_tabpage(workspace.attachment.id)
+		elseif workspace.attachment.type == "win" then
+			vim.api.nvim_set_current_win(workspace.attachment.id)
+		else
+			error("Internal error: close workspace with unknown attachment type.")
+		end
+
+		if self.active_workspace then
+			self:exit_workspace(self.active_workspace)
+		end
+		self:enter_workspace(workspace.id)
 	end
 end
 
