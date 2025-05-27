@@ -1,10 +1,5 @@
 local Utils = {}
 
----@class Inception.RootDir
----@field raw string
----@field absolute string
----@field safe string
-
 ---@param path string
 ---@return Inception.RootDir
 function Utils.normalize_file_path(path)
