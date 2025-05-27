@@ -2,6 +2,8 @@ local Workspace = require("inception.workspace")
 local Config = require("inception.config")
 local Utils = require("inception.utils")
 
+vim.api.nvim_create_augroup("InceptionBufferTracking", { clear = true })
+
 ---@class Inception.WorkspaceAttachment
 ---@field type "tab" | "win"
 ---@field id number
@@ -252,5 +254,65 @@ function Manager:focus_on_workspace(wsid)
 		self:enter_workspace(workspace.id)
 	end
 end
+
+---@param bufnr number
+---@param wsid number
+function Manager:workspace_buffer_add(bufnr, wsid)
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+
+	local workspace = self:get_workspace(wsid)
+
+	for _, id in ipairs(workspace.buffers) do
+		if id == bufnr then
+			return
+		end
+	end
+
+	table.insert(workspace.buffers, bufnr)
+end
+
+---@param args { buf: number }
+function Manager:handle_new_buffer_event(args)
+	if self.active_workspace then
+		self:workspace_buffer_add(args.buf, self.active_workspace)
+	end
+end
+--- auto add new buffers to active workspace
+vim.api.nvim_create_autocmd("BufReadPost", {
+	group = "InceptionBufferTracking",
+	callback = function(args)
+		require("inception.manager"):handle_new_buffer_event(args)
+	end,
+})
+
+-- auto remove closed buffers from workspaces
+---@param bufnr number
+---@param wsid number
+function Manager:workspace_buffer_remove(bufnr, wsid)
+	local workspace = self:get_workspace(wsid)
+
+	for i, id in ipairs(workspace.buffers or {}) do
+		if id == bufnr then
+			table.remove(workspace.buffers, i)
+			break
+		end
+	end
+end
+
+---@param args { buf: number }
+function Manager:handle_wipeout_buffer(args)
+	for _, wsid in ipairs(self.attached_workspaces) do
+		self:workspace_buffer_remove(args.buf, wsid)
+	end
+end
+
+vim.api.nvim_create_autocmd("BufWipeout", {
+	group = "InceptionBufferTracking",
+	callback = function(args)
+		require("inception.manager"):handle_buffer_wipeout(args)
+	end,
+})
 
 return Manager
