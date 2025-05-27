@@ -191,10 +191,10 @@ function Manager:attach_workspace(wsid, target_type, target_id)
 
 	if target_type == "tab" then
 		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
-			table.insert(workspace.buffers, vim.api.nvim_win_get_buf(win))
+			self:workspace_buffer_add(vim.api.nvin_win_get_buf(win), workspace.id)
 		end
 	elseif target_type == "win" then
-		table.insert(workspace.buffers, vim.api.nvim_getu_current_win())
+		self:workspace_buffer_add(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()), workspace.id)
 	else
 		error("Invalid attachment type: " .. target_type)
 	end
@@ -207,7 +207,10 @@ function Manager:detach_workspace(wsid)
 	local workspace = self:get_workspace(wsid)
 
 	workspace.attachment = nil
-	workspace.buffers = nil
+
+	for _, bufnr in ipairs(workspace.buffers) do
+		self:workspace_buffer_remove(bufnr, workspace.id)
+	end
 
 	if self.active_workspace == workspace.id then
 		self:exit_workspace(workspace.id)
