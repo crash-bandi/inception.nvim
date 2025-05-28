@@ -30,7 +30,7 @@ function Manager:get_next_available_id()
 end
 
 ---@param name string
----@param dirs? table
+---@param dirs? string[]
 ---@return Inception.Workspace
 function Manager:create_workspace(name, dirs)
 	if self:workspace_name_exists(name) then

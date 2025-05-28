@@ -16,19 +16,22 @@ local Utils = require("inception.utils")
 ---@field current_working_directory Inception.RootDir
 ---@field multi_root boolean
 ---@field buffers number[]
-local Workspace = {
+local Workspace = {}
+
+Workspace._defaults = {
 	root_dirs = {},
 	options = {
 		open_mode = "tab",
-		multi_root_mode = "virtual",
+		multi_root_mode = "disabled",
 	},
 }
+
 Workspace.__index = Workspace
 
 ---@class Inception.WorkspaceConfig
 ---@field id number
 ---@field name string
----@field root_dirs Inception.RootDir[]
+---@field root_dirs string[]
 ---@field options? table
 ---@field options.open_mode? string
 ---@field options.multi_root_mode? string
@@ -36,11 +39,19 @@ Workspace.__index = Workspace
 ---@param config Inception.WorkspaceConfig
 ---@return Inception.Workspace
 function Workspace.new(config)
-	local workspace = setmetatable({}, Workspace)
+	local workspace = setmetatable(vim.deepcopy(Workspace._defaults), Workspace)
 
 	workspace.id = config.id
 	workspace.name = config.name
-	workspace.options = config.options or {}
+	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.options or {})
+
+	if workspace.options.multi_root_mode == "disabled" then
+		workspace:set_directory(config.root_dirs[1])
+	else
+		for _, dir in ipairs(config.root_dirs) do
+			workspace:add_root_directory(dir)
+		end
+	end
 
 	return workspace
 end
@@ -51,7 +62,7 @@ function Workspace:add_root_directory(dir)
 		error("Invalid directory: " .. dir)
 	end
 
-	local entry = Utils.normalize_root_dir(dir)
+	local entry = Utils.normalize_file_path(dir)
 
 	for _, existing in ipairs(self.root_dirs) do
 		if existing.absolute == entry.absolute then
@@ -84,10 +95,10 @@ function Workspace:set_directory(dir)
 		error("Invalid directory: " .. dir)
 	end
 
-	local entry = Utils.normalize_root_dir(dir)
+	local entry = Utils.normalize_file_path(dir)
 
 	self.root_dirs = { entry }
-	self:update_multi_root_flag()
+	-- self:update_multi_root_flag()
 
 	self:select_directory(entry)
 end
@@ -95,7 +106,10 @@ end
 ---@param root_dir Inception.RootDir
 function Workspace:select_directory(root_dir)
 	self.current_working_directory = root_dir
-	self:sync_cwd()
+
+	if self.attachment then
+		self:sync_cwd()
+	end
 end
 
 function Workspace:sync_cwd()
@@ -109,6 +123,7 @@ function Workspace:sync_cwd()
 end
 
 function Workspace:update_multi_root_flag()
+	error("MULTI-ROOT NOT IMPLEMENTED", vim.log.levels.ERROR)
 	self.multi_root = #self.root_dirs > 1
 end
 
