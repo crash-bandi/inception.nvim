@@ -8,6 +8,7 @@ local Utils = require("inception.utils")
 ---@class Inception.Workspace
 ---@field id number unique id
 ---@field name string unique name
+---@field state Inception.WorkspaceState
 ---@field root_dirs Inception.RootDir[]
 ---@field options table
 ---@field options.open_mode "tab" | "win"
@@ -17,6 +18,7 @@ local Utils = require("inception.utils")
 ---@field multi_root boolean
 ---@field buffers number[]
 local Workspace = {}
+Workspace.__index = Workspace
 
 Workspace._defaults = {
 	root_dirs = {},
@@ -26,7 +28,12 @@ Workspace._defaults = {
 	},
 }
 
-Workspace.__index = Workspace
+---@enum Inception.WorkspaceState
+Workspace.STATE = {
+	loaded = 1,
+	attached = 2,
+	active = 3,
+}
 
 ---@class Inception.WorkspaceConfig
 ---@field id number
@@ -43,6 +50,7 @@ function Workspace.new(config)
 
 	workspace.id = config.id
 	workspace.name = config.name
+	workspace.state = Workspace.STATE.loaded
 	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.options or {})
 
 	if workspace.options.multi_root_mode == "disabled" then

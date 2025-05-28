@@ -21,6 +21,8 @@ Manager.name_map = {}
 Manager.active_workspace = nil
 Manager.attached_workspaces = {}
 
+---@return number
+--- Gets next available workspace id, filling in gaps
 function Manager:get_next_available_id()
 	local id = 1
 	while self.workspaces[id] do
@@ -30,14 +32,19 @@ function Manager:get_next_available_id()
 end
 
 ---@param name string
----@param dirs? string[]
+---@param dirs string | string[]
 ---@return Inception.Workspace
-function Manager:create_workspace(name, dirs)
-	if self:workspace_name_exists(name) then
+--- Create new workspace, assign id, name, root dirs, options
+--- Set cwd
+--- open workspace
+function Manager:workspace_create(name, dirs)
+	if self:get_workspace_name_exists(name) then
 		error("Workspace '" .. name .. "' already exists", vim.log.levels.ERROR)
 	end
 
-	dirs = dirs or { vim.fn.getcwd() }
+	if type(dirs) == "string" then
+		dirs = { dirs }
+	end
 
 	for _, dir in ipairs(dirs) do
 		if not Utils.is_valid_directory(dir) then
@@ -59,7 +66,21 @@ function Manager:create_workspace(name, dirs)
 end
 
 ---@param wsid number
+--- Delete workspace <wsid>
+function Manager:workspace_unload(wsid)
+	local workspace = self:get_workspace(wsid)
+
+	if workspace.STATE == Workspace.STATE.attached then
+		self:workspace_close(wsid)
+	end
+
+	self.workspaces[wsid] = nil
+	self.name_map[workspace.name] = nil
+end
+
+---@param wsid number
 ---@return Inception.Workspace
+--- Return worksapce <wsid>
 function Manager:get_workspace(wsid)
 	local workspace = self.workspaces[wsid]
 
@@ -72,13 +93,15 @@ end
 
 ---@param wsid string
 ---@return boolean
-function Manager:workspace_exists(wsid)
+--- Return if workspace <wsid> exists
+function Manager:get_workspace_exists(wsid)
 	local ok, _ = pcall(self.get_workspace, self, wsid)
 	return ok
 end
 
 ---@param name string
 ---@return Inception.Workspace
+--- Return workspace <name>
 function Manager:get_workspace_by_name(name)
 	local id = self.name_map[name]
 
@@ -91,14 +114,16 @@ end
 
 ---@param name string
 ---@return boolean
-function Manager:workspace_name_exists(name)
+--- Return if <name> exists
+function Manager:get_workspace_name_exists(name)
 	local ok, _ = pcall(self.get_workspace_by_name, self, name)
 	return ok
 end
 
 ---@param new_name string
 ---@param wsid? number
-function Manager:rename_workspace(new_name, wsid)
+--- Rename workspace <wsid> if <name> doesn't exist
+function Manager:workspace_rename(new_name, wsid)
 	local workspace = nil
 	if wsid then
 		workspace = self:get_workspace(wsid)
@@ -110,7 +135,7 @@ function Manager:rename_workspace(new_name, wsid)
 		error("No active workspace detected, and none provided", vim.log.levels.ERROR)
 	end
 
-	if self:workspace_name_exists(new_name) then
+	if self:get_workspace_name_exists(new_name) then
 		error("Workspace '" .. new_name .. "' already exists", vim.log.levels.ERROR)
 	end
 
@@ -119,14 +144,9 @@ function Manager:rename_workspace(new_name, wsid)
 end
 
 ---@param wsid number
-function Manager:set_workspace_active(wsid)
-	local workspace = self:get_workspace(wsid)
-	self.active_workspace = workspace.id
-end
-
----@param wsid number
 ---@param mode? string
-function Manager:open_workspace(wsid, mode)
+--- Create new <mode> and attach workspace <wsid
+function Manager:workspace_open(wsid, mode)
 	local workspace = self:get_workspace(wsid)
 	local open_mode = mode or workspace.options.open_mode or Config.options.default_open_mode
 
@@ -141,11 +161,13 @@ function Manager:open_workspace(wsid, mode)
 		error("Invalid workspace open mode: " .. mode, vim.log.levels.ERROR)
 	end
 
-	self:attach_workspace(workspace.id, open_mode, target_id)
+	self:workspace_attach(workspace.id, open_mode, target_id)
 end
 
 ---@param wsid number
-function Manager:close_workspace(wsid)
+--- close attachment tab/win
+--- Detach workspace <wsid>
+function Manager:workspace_close(wsid)
 	local workspace = self:get_workspace(wsid)
 	local attachment = workspace.attachment
 
@@ -159,25 +181,29 @@ function Manager:close_workspace(wsid)
 			if current_tabpage ~= attachment.id then
 				vim.api.nvim_set_current_tabpage(attachment.id)
 				vim.cmd("tablose")
-				vim.api.nvim_set_current_tabpage(current_tabpage)
+				vim.uapi.nvim_set_current_tabpage(current_tabpage)
 			end
 		end
-		self:detach_workspace(wsid)
 	elseif attachment.type == "win" then
 		error("NOT IMPLEMENTED")
 	else
 		error("Internal error: close workspace with unknown attachment type.")
 	end
+
+	self:workspace_detach(wsid)
 end
 
 ---@param wsid number
 ---@param target_type string
 ---@param target_id number
-function Manager:attach_workspace(wsid, target_type, target_id)
+--- Set workspace <wsid> to attachment to given target
+--- assign current active buffer(s) to workspace
+--- enter workspace <wsid>
+function Manager:workspace_attach(wsid, target_type, target_id)
 	local workspace = self:get_workspace(wsid)
 
 	if workspace.attachment then
-		self:detach_workspace(workspace.id)
+		self:workspace_detach(workspace.id)
 	end
 
 	---@type Inception.WorkspaceAttachment
@@ -191,30 +217,33 @@ function Manager:attach_workspace(wsid, target_type, target_id)
 
 	if target_type == "tab" then
 		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
-			self:workspace_buffer_add(vim.api.nvin_win_get_buf(win), workspace.id)
+			self:workspace_buffer_attach(vim.api.nvin_win_get_buf(win), workspace.id)
 		end
 	elseif target_type == "win" then
-		self:workspace_buffer_add(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()), workspace.id)
+		self:workspace_buffer_attach(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()), workspace.id)
 	else
 		error("Invalid attachment type: " .. target_type)
 	end
 
-	table.insert(self.attached_workspaces, workspace.id)
+	workspace.state = Workspace.STATE.attached
+	self:workspace_enter(wsid)
 end
 
 ---@param wsid number
-function Manager:detach_workspace(wsid)
+--- Detach buffer(s) from workspace <wsid>
+--- Remove workspace <wsid> attachment
+--- exit workspace <wsid>
+function Manager:workspace_detach(wsid)
 	local workspace = self:get_workspace(wsid)
 
 	workspace.attachment = nil
 
 	for _, bufnr in ipairs(workspace.buffers) do
-		self:workspace_buffer_remove(bufnr, workspace.id)
+		self:workspace_buffer_detach(bufnr, workspace.id)
 	end
 
-	if self.active_workspace == workspace.id then
-		self:exit_workspace(workspace.id)
-	end
+	workspace.state = Workspace.STATE.loaded
+	self:workspace_exit(wsid)
 
 	for i, id in ipairs(self.attached_workspaces) do
 		if id == workspace.id then
@@ -225,20 +254,30 @@ function Manager:detach_workspace(wsid)
 end
 
 ---@param wsid number
-function Manager:enter_workspace(wsid)
+--- Mark workspace <wsid> as active workspace
+--- Activate workspace <wsid>
+function Manager:workspace_enter(wsid)
 	local workspace = self:get_workspace(wsid)
 
-	self:set_workspace_active(workspace.id)
+	workspace.state = Workspace.STATE.active
+	self.active_workspace = workspace.id
 	workspace:sync_cwd()
 end
 
 ---@param wsid number
-function Manager:exit_workspace(wsid)
+--- Mark active workspace as nil
+--- Deactivate workspace <wsid>
+function Manager:workspace_exit(wsid)
 	local workspace = self:get_workspace(wsid)
+
+	workspace.state = Workspace.STATE.attached
 	self.active_workspace = nil
 end
 
 ---@param wsid number
+--- Set current tab/win to workspace <wsid> attachment
+--- Exit active workspace
+--- Enter workspace <wsid>
 function Manager:focus_on_workspace(wsid)
 	local workspace = self:get_workspace(wsid)
 
@@ -252,15 +291,16 @@ function Manager:focus_on_workspace(wsid)
 		end
 
 		if self.active_workspace then
-			self:exit_workspace(self.active_workspace)
+			self:workspace_exit(self.active_workspace)
 		end
-		self:enter_workspace(workspace.id)
+		self:workspace_enter(workspace.id)
 	end
 end
 
 ---@param bufnr number
 ---@param wsid number
-function Manager:workspace_buffer_add(bufnr, wsid)
+--- Attach buffer <bufnr> to workspace <wsid>
+function Manager:workspace_buffer_attach(bufnr, wsid)
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return
 	end
@@ -277,12 +317,14 @@ function Manager:workspace_buffer_add(bufnr, wsid)
 end
 
 ---@param args { buf: number }
+--- Handler for new buffer event
 function Manager:handle_new_buffer_event(args)
 	if self.active_workspace then
-		self:workspace_buffer_add(args.buf, self.active_workspace)
+		self:workspace_buffer_attach(args.buf, self.active_workspace)
 	end
 end
---- auto add new buffers to active workspace
+
+--- catch new buffer events and trigger handler
 vim.api.nvim_create_autocmd("BufReadPost", {
 	group = "InceptionBufferTracking",
 	callback = function(args)
@@ -290,10 +332,10 @@ vim.api.nvim_create_autocmd("BufReadPost", {
 	end,
 })
 
--- auto remove closed buffers from workspaces
 ---@param bufnr number
 ---@param wsid number
-function Manager:workspace_buffer_remove(bufnr, wsid)
+-- Detach buffer <bufnr> from workspace <wsid>
+function Manager:workspace_buffer_detach(bufnr, wsid)
 	local workspace = self:get_workspace(wsid)
 
 	for i, id in ipairs(workspace.buffers or {}) do
@@ -305,12 +347,14 @@ function Manager:workspace_buffer_remove(bufnr, wsid)
 end
 
 ---@param args { buf: number }
+--- Handler for close buffer events
 function Manager:handle_wipeout_buffer(args)
 	for _, wsid in ipairs(self.attached_workspaces) do
-		self:workspace_buffer_remove(args.buf, wsid)
+		self:workspace_buffer_detach(args.buf, wsid)
 	end
 end
 
+--- catch close buffer events and trigger handler
 vim.api.nvim_create_autocmd("BufWipeout", {
 	group = "InceptionBufferTracking",
 	callback = function(args)
