@@ -2,8 +2,8 @@
 local Config = {
 	options = {
 		default_open_mode = "tab",
+		exit_on_last_tab_close = false,
 	},
-
 }
 
 ---@class Inception.UserConfig
