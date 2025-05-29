@@ -1,13 +1,19 @@
----@class Inception.Config
+---@class Inception.ConfigOptions
+---@field exit_on_last_tab_close boolean
+
+---@class Inception.config
+---@field options Inception.ConfigOptions
 local Config = {
 	options = {
-		default_open_mode = "tab",
 		exit_on_last_tab_close = false,
 	},
 }
 
+---@class Inception.UserConfigOptions
+---@field exit_on_last_tab_close? boolean
+
 ---@class Inception.UserConfig
----@field options? table
+---@field options? Inception.UserConfigOptions
 
 ---@param opts Inception.UserConfig
 function Config.load(opts)

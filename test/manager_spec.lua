@@ -1,12 +1,13 @@
 local Manager = require("inception.manager")
 local Utils = require("inception.utils")
+
 local ws_state = require("inception.workspace").STATE
+local ws_default_opts = require("inception.workspace")._new.options
 
 local current_dir = vim.fn.getcwd()
 
-describe("Manager.workspace_create", function()
+describe("Manager.workspace_create:", function()
 	local name = "test1"
-	local ws_default_opts = require("inception.workspace")._defaults.options
 
 	after_each(function()
 		for _, workspace in ipairs(Manager.workspaces) do
@@ -34,6 +35,19 @@ describe("Manager.workspace_create", function()
 			current_working_directory = Utils.normalize_file_path("~"),
 			root_dirs = { Utils.normalize_file_path("~") },
 		}, Manager:workspace_create(name, "~"))
+	end)
+
+	it("should create a workspace with custom options", function()
+		local custom_opts = vim.deepcopy(ws_default_opts)
+		custom_opts.open_mode = "win"
+		assert.are.same({
+			id = 1,
+			name = name,
+			state = ws_state.loaded,
+			options = custom_opts,
+			current_working_directory = Utils.normalize_file_path(current_dir),
+			root_dirs = { Utils.normalize_file_path(current_dir) },
+		}, Manager:workspace_create(name, current_dir, custom_opts))
 	end)
 
 	it("should create workspaces with no gaps in ids", function()
@@ -67,7 +81,7 @@ describe("Manager.workspace_create", function()
 	end)
 end)
 
-describe("Manager.workspace_rename", function()
+describe("Manager.workspace_rename:", function()
 	after_each(function()
 		for _, workspace in ipairs(Manager.workspaces) do
 			Manager:workspace_unload(workspace.id)
@@ -90,7 +104,7 @@ describe("Manager.workspace_rename", function()
 	end)
 end)
 
-describe("Manager.workspace_open", function()
+describe("Manager.workspace_open:", function()
 	local workspace = Manager:workspace_create("test1", current_dir)
 	local external_buf = vim.api.nvim_create_buf(true, false)
 
@@ -126,8 +140,8 @@ describe("Manager.workspace_open", function()
 		assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(), ":p"), workspace.current_working_directory.absolute)
 	end)
 
-	workspace:set_directory("~")
 	it("workspace can change current working directory", function()
+		workspace:set_directory("~")
 		assert.are.same(vim.fn.fnamemodify("~", ":p"), workspace.current_working_directory.absolute)
 	end)
 
@@ -140,8 +154,8 @@ describe("Manager.workspace_open", function()
 	end)
 
 	it("workspace captures new buffer", function()
-		local buf = vim.api.nvim_create_buf(true, false)
-		assert.is_true(Utils.contains(workspace.buffers, buf))
+		local new_buf = vim.api.nvim_create_buf(true, false)
+		assert.is_true(Utils.contains(workspace.buffers, new_buf))
 	end)
 
 	it("workspace can attach existing buffer", function()
@@ -153,17 +167,72 @@ describe("Manager.workspace_open", function()
 		Manager:workspace_buffer_detach(external_buf, workspace.id)
 		assert.is_not_true(Utils.contains(workspace.buffers, external_buf))
 	end)
+
+	it("workspace should remove buffer when buffer is closed", function()
+		Manager:workspace_buffer_attach(external_buf, workspace.id)
+		vim.api.nvim_set_current_buf(external_buf)
+		vim.api.nvim_buf_delete(external_buf, { force = true })
+		assert.is_not_true(Utils.contains(workspace.buffers, external_buf))
+	end)
 end)
 
-describe("Manager.workspace_close", function()
+describe("Manager.workspace_close:", function()
 	local workspace = Manager:get_workspace(Manager.active_workspace)
+	local current_attachment = vim.deepcopy(workspace.attachment)
+	local current_bufs = vim.api.nvim_list_bufs()
+
 	it("closes workspace without error", function()
 		assert.has_no.error(function()
 			Manager:workspace_close(workspace.id)
 		end)
 	end)
 
-	it("test", function()
-		assert.are.same({}, workspace)
+	it("workspace should not be in manager's attached workspaces list", function()
+		assert.is_not_true(Utils.contains(Manager.attached_workspaces, workspace.id))
+	end)
+
+	it("workspace should not be manager's active workspace", function()
+		assert.are_not.same(Manager.active_workspace, workspace.id)
+	end)
+
+	it("should have closed attached tab", function()
+		assert.is_not_true(Utils.contains(vim.api.nvim_list_tabpages(), current_attachment.id))
+	end)
+
+	it("workspace state should be 'loaded'", function()
+		assert.are.same(ws_state.loaded, workspace.state)
+	end)
+
+	it("should have no attachment", function()
+		assert.are.same(nil, workspace.attachment)
+	end)
+
+	it("should have no buffers attached", function()
+		assert.are.same(0, #workspace.buffers)
+	end)
+
+	it("should have left all existing buffers intact", function()
+		assert.are.same(current_bufs, vim.api.nvim_list_bufs())
+	end)
+
+	Manager:workspace_unload(workspace.id)
+
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if bufnr ~= 1 then
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+		end
+	end
+end)
+
+describe("Manager.workspace_attach", function()
+	local workspace = Manager:workspace_create("test1", current_dir)
+	vim.cmd("tabnew")
+	local external_tabpage = vim.api.nvim_get_current_tabpage()
+	vim.cmd("tabprev")
+
+	it("should attach to target tab without error", function()
+		assert.has_no.errors(function()
+			Manager:workspace_attach(workspace.id, "tab", external_tabpage)
+		end)
 	end)
 end)

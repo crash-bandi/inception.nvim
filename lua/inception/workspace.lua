@@ -1,27 +1,30 @@
 local Utils = require("inception.utils")
 
----@class Inception.RootDir
+---@class Inception.WorkspaceRootDir
 ---@field raw string user provided
 ---@field absolute string expanded to absolute
 ---@field safe string vim escaped
+
+---@class Inception.WorkspaceOptions
+---@field open_mode "tab" | "win"
+---@field multi_root_mode "virtual" | "select" | "disabled"
 
 ---@class Inception.Workspace
 ---@field id number unique id
 ---@field name string unique name
 ---@field state Inception.WorkspaceState
----@field root_dirs Inception.RootDir[]
----@field options table
----@field options.open_mode "tab" | "win"
----@field options.multi_root_mode "virtual" | "select" | "disabled"
+---@field root_dirs Inception.WorkspaceRootDir[]
 ---@field attachment Inception.WorkspaceAttachment
----@field current_working_directory Inception.RootDir
+---@field current_working_directory Inception.WorkspaceRootDir
 ---@field multi_root boolean
 ---@field buffers number[]
+---@field options Inception.WorkspaceOptions
 local Workspace = {}
 Workspace.__index = Workspace
 
-Workspace._defaults = {
+Workspace._new = {
 	root_dirs = {},
+	---@type Inception.WorkspaceOptions
 	options = {
 		open_mode = "tab",
 		multi_root_mode = "disabled",
@@ -39,19 +42,17 @@ Workspace.STATE = {
 ---@field id number
 ---@field name string
 ---@field root_dirs string[]
----@field options? table
----@field options.open_mode? string
----@field options.multi_root_mode? string
+---@field opts? Inception.WorkspaceOptions
 
 ---@param config Inception.WorkspaceConfig
 ---@return Inception.Workspace
 function Workspace.new(config)
-	local workspace = setmetatable(vim.deepcopy(Workspace._defaults), Workspace)
+	local workspace = setmetatable(vim.deepcopy(Workspace._new), Workspace)
 
 	workspace.id = config.id
 	workspace.name = config.name
 	workspace.state = Workspace.STATE.loaded
-	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.options or {})
+	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.opts or {})
 
 	if workspace.options.multi_root_mode == "disabled" then
 		workspace:set_directory(config.root_dirs[1])
@@ -111,7 +112,7 @@ function Workspace:set_directory(dir)
 	self:select_directory(entry)
 end
 
----@param root_dir Inception.RootDir
+---@param root_dir Inception.WorkspaceRootDir
 function Workspace:select_directory(root_dir)
 	self.current_working_directory = root_dir
 

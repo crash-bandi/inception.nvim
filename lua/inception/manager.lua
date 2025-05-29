@@ -17,7 +17,6 @@ local Manager = {}
 Manager.__index = Manager
 Manager.workspaces = {}
 Manager.name_map = {}
-
 Manager.active_workspace = nil
 Manager.attached_workspaces = {}
 
@@ -33,11 +32,12 @@ end
 
 ---@param name string
 ---@param dirs string | string[]
+---@param opts? Inception.WorkspaceOptions
 ---@return Inception.Workspace
 --- Create new workspace, assign id, name, root dirs, options
 --- Set cwd
 --- open workspace
-function Manager:workspace_create(name, dirs)
+function Manager:workspace_create(name, dirs, opts)
 	if self:get_workspace_name_exists(name) then
 		error("Workspace '" .. name .. "' already exists", vim.log.levels.ERROR)
 	end
@@ -53,11 +53,16 @@ function Manager:workspace_create(name, dirs)
 	end
 
 	local id = self:get_next_available_id()
-	local workspace = Workspace.new({
+
+	---@type Inception.WorkspaceConfig
+	local workspace_config = {
 		id = id,
 		name = name,
 		root_dirs = dirs,
-	})
+		opts = opts,
+	}
+
+	local workspace = Workspace.new(workspace_config)
 
 	self.workspaces[id] = workspace
 	self.name_map[name] = id
@@ -137,27 +142,29 @@ end
 
 ---@param wsid number
 ---@param mode? string
---- Create new <mode> and attach workspace <wsid
+--- Create new <mode> and attach workspace <wsid>
+--- focus on workspace <wsid>
 function Manager:workspace_open(wsid, mode)
 	local workspace = self:get_workspace(wsid)
 
-	if workspace.state == Workspace.STATE.loaded then
-		local open_mode = mode or workspace.options.open_mode or Config.options.default_open_mode
+	if workspace.state ~= Workspace.STATE.active then
+		if workspace.state ~= Workspace.STATE.attached then
+			local open_mode = mode or workspace.options.open_mode
 
-		local target_id = nil
-		if open_mode == "tab" then
-			vim.cmd("tabnew")
-			target_id = vim.api.nvim_get_current_tabpage()
-		elseif open_mode == "win" then
-			vim.cmd("new")
-			target_id = vim.api.nvim_get_current_win()
-		else
-			error("Invalid workspace open mode: " .. mode, vim.log.levels.ERROR)
+			local target_id = nil
+			if open_mode == "tab" then
+				vim.cmd("tabnew")
+				target_id = vim.api.nvim_get_current_tabpage()
+			elseif open_mode == "win" then
+				vim.cmd("new")
+				target_id = vim.api.nvim_get_current_win()
+			else
+				error("Invalid workspace open mode: " .. mode, vim.log.levels.ERROR)
+			end
+
+			self:workspace_attach(workspace.id, open_mode, target_id)
 		end
-
-		self:workspace_attach(workspace.id, open_mode, target_id)
-	elseif workspace.state == Workspace.STATE.attached then
-		Manager:focus_on_workspace(workspace.id)
+		self:focus_on_workspace(workspace.id)
 	end
 end
 
@@ -232,8 +239,6 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 	else
 		error("Invalid attachment type: " .. target_type)
 	end
-
-	self:workspace_enter(wsid)
 end
 
 ---@param wsid number
@@ -352,7 +357,7 @@ end
 
 ---@param args { buf: number }
 --- Handler for close buffer events
-function Manager:handle_wipeout_buffer(args)
+function Manager:handle_buffer_wipeout(args)
 	for _, wsid in ipairs(self.attached_workspaces) do
 		self:workspace_buffer_detach(args.buf, wsid)
 	end
