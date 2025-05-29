@@ -3,6 +3,7 @@ local Config = require("inception.config")
 local Utils = require("inception.utils")
 
 vim.api.nvim_create_augroup("InceptionBufferTracking", { clear = true })
+vim.api.nvim_create_augroup("InceptionTabTracking", { clear = true })
 
 ---@class Inception.WorkspaceAttachment
 ---@field type "tab" | "win"
@@ -210,7 +211,6 @@ end
 ---@param target_id number
 --- Set workspace <wsid> to attachment to given target
 --- assign current active buffer(s) to workspace
---- enter workspace <wsid>
 function Manager:workspace_attach(wsid, target_type, target_id)
 	local workspace = self:get_workspace(wsid)
 
@@ -244,7 +244,6 @@ end
 ---@param wsid number
 --- Detach buffer(s) from workspace <wsid>
 --- Remove workspace <wsid> attachment
---- exit workspace <wsid>
 function Manager:workspace_detach(wsid)
 	local workspace = self:get_workspace(wsid)
 
@@ -325,6 +324,60 @@ function Manager:workspace_buffer_attach(bufnr, wsid)
 
 	table.insert(workspace.buffers, bufnr)
 end
+
+---@param args { tab: number }
+--- Handler for tabpage enter event
+function Manager:handle_tabpage_enter_event(args)
+	for _, workspace in ipairs(Manager.workspaces) do
+		if workspace.state == Workspace.STATE.attached then
+			if workspace.attachment.type == "tab" and workspace.attachment.id == args.tab then
+				Manager:workspace_enter(workspace.id)
+				break
+			end
+		end
+	end
+end
+
+vim.api.nvim_create_autocmd("TabEnter", {
+	group = "InceptionTabTracking",
+	callback = function(args)
+		require("inception.manager"):handle_tabpage_enter_event({ tab = vim.api.nvim_get_current_tabpage() })
+	end,
+})
+
+---@param args { tab: number }
+------ Handler for tabpage enter event
+function Manager:handle_tabpage_leave_event(args)
+	if Manager.active_workspace then
+		Manager:workspace_exit(Manager.active_workspace)
+	end
+end
+
+vim.api.nvim_create_autocmd("TabLeave", {
+	group = "InceptionTabTracking",
+	callback = function(args)
+		require("inception.manager"):handle_tabpage_leave_event({ tab = vim.api.nvim_get_current_tabpage() })
+	end,
+})
+
+--- Handler for tabpage enter event
+function Manager:handle_tabpage_closed_event()
+	local current_tabpages = vim.api.nvim_list_tabpages()
+	for _, workspace in ipairs(Manager.workspaces) do
+		if workspace.attachment and workspace.attachment.type == "tab" then
+			if not Utils.contains(current_tabpages, workspace.attachment.id) then
+				Manager:workspace_detach(workspace.id)
+			end
+		end
+	end
+end
+
+vim.api.nvim_create_autocmd("TabClosed", {
+	group = "InceptionTabTracking",
+	callback = function()
+		require("inception.manager"):handle_tabpage_closed_event()
+	end,
+})
 
 ---@param args { buf: number }
 --- Handler for new buffer event

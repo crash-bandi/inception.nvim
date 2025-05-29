@@ -6,6 +6,31 @@ local ws_default_opts = require("inception.workspace")._new.options
 
 local current_dir = vim.fn.getcwd()
 
+local function cleanup()
+	for _, workspace in ipairs(Manager.workspaces) do
+		Manager:workspace_unload(workspace.id)
+	end
+
+	for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+		if tab ~= 1 then
+			vim.api.nvim_set_current_tabpage(tab)
+			vim.cmd("tabclose")
+		end
+	end
+
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if win ~= 1000 then
+			vim.api.nvim_win_close(win, false)
+		end
+	end
+
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if buf ~= 1 then
+			vim.api.nvim_buf_delete(buf, { force = true })
+		end
+	end
+end
+
 describe("Manager.workspace_create:", function()
 	local name = "test1"
 
@@ -81,6 +106,16 @@ describe("Manager.workspace_create:", function()
 	end)
 end)
 
+describe("Env cleanup", function()
+	cleanup()
+	it("is clean", function()
+		assert.are.same(0, #Manager.workspaces)
+		assert.are.same(1, #vim.api.nvim_list_tabpages())
+		assert.are.same(1, #vim.api.nvim_list_wins())
+		assert.are.same(1, #vim.api.nvim_list_bufs())
+	end)
+end)
+
 describe("Manager.workspace_rename:", function()
 	after_each(function()
 		for _, workspace in ipairs(Manager.workspaces) do
@@ -101,6 +136,16 @@ describe("Manager.workspace_rename:", function()
 		assert.has.errors(function()
 			Manager:workspace_rename(w2.name, w1.id)
 		end)
+	end)
+end)
+
+describe("Env cleanup", function()
+	cleanup()
+	it("is clean", function()
+		assert.are.same(0, #Manager.workspaces)
+		assert.are.same(1, #vim.api.nvim_list_tabpages())
+		assert.are.same(1, #vim.api.nvim_list_wins())
+		assert.are.same(1, #vim.api.nvim_list_bufs())
 	end)
 end)
 
@@ -170,7 +215,6 @@ describe("Manager.workspace_open:", function()
 
 	it("workspace should remove buffer when buffer is closed", function()
 		Manager:workspace_buffer_attach(external_buf, workspace.id)
-		vim.api.nvim_set_current_buf(external_buf)
 		vim.api.nvim_buf_delete(external_buf, { force = true })
 		assert.is_not_true(Utils.contains(workspace.buffers, external_buf))
 	end)
@@ -214,25 +258,81 @@ describe("Manager.workspace_close:", function()
 	it("should have left all existing buffers intact", function()
 		assert.are.same(current_bufs, vim.api.nvim_list_bufs())
 	end)
-
-	Manager:workspace_unload(workspace.id)
-
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if bufnr ~= 1 then
-			vim.api.nvim_buf_delete(bufnr, { force = true })
-		end
-	end
 end)
 
-describe("Manager.workspace_attach", function()
+describe("Test env cleanup", function()
+	cleanup()
+	it("is clean", function()
+		assert.are.same(0, #Manager.workspaces)
+		assert.are.same(1, #vim.api.nvim_list_tabpages())
+		assert.are.same(1, #vim.api.nvim_list_wins())
+		assert.are.same(1, #vim.api.nvim_list_bufs())
+	end)
+end)
+
+describe("Manager.workspace_attach:", function()
 	local workspace = Manager:workspace_create("test1", current_dir)
 	vim.cmd("tabnew")
 	local external_tabpage = vim.api.nvim_get_current_tabpage()
 	vim.cmd("tabprev")
 
-	it("should attach to target tab without error", function()
+	it("should attach to unfocused target tab without error", function()
 		assert.has_no.errors(function()
 			Manager:workspace_attach(workspace.id, "tab", external_tabpage)
 		end)
+	end)
+
+	it("Workspace should be attached to tab", function()
+		assert.are.same({ type = "tab", id = external_tabpage }, workspace.attachment)
+	end)
+
+	it("workspace state should be 'attached'", function()
+		assert.are.same(ws_state.attached, workspace.state)
+	end)
+
+	it("Manager active workspace should be nil", function()
+		assert.are.same(nil, Manager.active_workspace)
+	end)
+end)
+
+describe("Manager.focus_on_workspace", function()
+	local workspace = Manager:get_workspace_by_name("test1")
+	it("should focus on workspace without errors", function()
+		assert.has_no.errors(function()
+			Manager:focus_on_workspace(workspace.id)
+		end)
+	end)
+
+	it("workspace should state should be 'active'", function()
+		assert.are.same(ws_state.active, workspace.state)
+	end)
+
+	it("Manager active workspace should be workspace", function()
+		assert.are.same(Manager.active_workspace, workspace.id)
+	end)
+
+	vim.cmd("tabprev")
+
+	it("workspace state should be 'attached'", function()
+		assert.are.same(ws_state.attached, workspace.state)
+	end)
+end)
+
+describe("Manager.workspace_detach:", function()
+	local workspace = Manager:get_workspace_by_name("test1")
+	it("should detach without issue", function()
+		assert.has_no.errors(function()
+			Manager:workspace_detach(workspace.id)
+		end)
+	end)
+end)
+
+describe("Test env cleanup", function()
+	cleanup()
+	it("is clean", function()
+		assert.are.same(0, #Manager.workspaces)
+		assert.are.same(1, #vim.api.nvim_list_tabpages())
+		assert.are.same(1, #vim.api.nvim_list_wins())
+		assert.are.same(1, #vim.api.nvim_list_bufs())
 	end)
 end)
