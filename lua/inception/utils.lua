@@ -1,7 +1,7 @@
 local Utils = {}
 
 ---@param path string
----@return Inception.RootDir
+---@return Inception.WorkspaceRootDir
 function Utils.normalize_file_path(path)
 	local absolute = vim.fn.fnamemodify(path, ":p")
 	local escaped = vim.fn.fnameescape(absolute)
@@ -22,12 +22,12 @@ end
 ---@param tbl table
 ---@param val any
 function Utils.contains(tbl, val)
-  for _, v in ipairs(tbl) do
-    if v == val then
-      return true
-    end
-  end
-  return false
+	for _, v in ipairs(tbl) do
+		if v == val then
+			return true
+		end
+	end
+	return false
 end
 
 return Utils
