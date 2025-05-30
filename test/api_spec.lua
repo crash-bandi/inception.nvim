@@ -1,7 +1,9 @@
 local Api = require("inception.api")
 local Manager = require("inception.manager")
 
-describe("api.create_new_workspace", function()
+local ws_state = require("inception.workspace").STATE
+
+describe("api.create_new_workspace:", function()
 	it("Should create a new workspace without errors", function()
 		assert.has_no_errors(function()
 			Api.create_new_workspace("test1")
@@ -9,15 +11,89 @@ describe("api.create_new_workspace", function()
 	end)
 end)
 
-describe("api.set_workspace", function() end)
+describe("api.open_workspace:", function()
+	it("should open workspace without error", function()
+		assert.has_no_errors(function()
+			Api.open_workspace(1)
+		end)
+	end)
 
--- describe("api.set_workspace_prev", function()
--- 	Api.create_new_workspace("test2")
--- 	Api.create_new_workspace("test3")
---
--- 	it("Should move to previous workspace without errors", function()
--- 		assert.has_no_errors(function()
---
---     end)
--- 	end)
--- end)
+	it("workspace state should be 'active'", function()
+		local workspace = Manager:get_workspace_by_name("test1")
+		assert.are.same(ws_state.active, workspace.state)
+	end)
+end)
+
+describe("api.set_workspace_prev", function()
+	Api.create_new_workspace("test2")
+	Api.create_new_workspace("test3")
+	Api.open_workspace(2)
+	vim.cmd("tabnext")
+
+	it("Should move to previous workspace without errors", function()
+		assert.has_no_errors(function()
+			Api.set_workspace_prev()
+		end)
+	end)
+
+	it("Should have jump to last attached workspace", function()
+		assert.are.same(2, Api.get_workspace())
+	end)
+
+	it("Should move to next workspace without errors", function()
+		assert.has_no_errors(function()
+			Api.set_workspace_next()
+		end)
+	end)
+
+	it("Should have jump to next attached workspace", function()
+		assert.are.same(1, Api.get_workspace())
+	end)
+
+	Api.open_workspace(3)
+	Api.set_workspace_next()
+
+	it("Should have jump to next attached workspace", function()
+		assert.are.same(1, Api.get_workspace())
+	end)
+
+	Api.set_workspace_next()
+
+	it("Should have jump to next attached workspace", function()
+		assert.are.same(2, Api.get_workspace())
+	end)
+end)
+
+describe("api.close_workspace", function()
+	it("should close workspace without errors", function()
+		assert.has_no_errors(function()
+			Api.close_workspace(1)
+		end)
+	end)
+
+	it("workspace state should be 'loaded'", function()
+		local workspace = Manager:get_workspace_by_name("test1")
+		assert.are.same(ws_state.loaded, workspace.state)
+	end)
+
+	Api.close_workspace(2)
+	Manager:workspace_unload(2)
+	Api.close_workspace(3)
+	Manager:workspace_unload(3)
+end)
+
+describe("api.attach_workspace", function()
+	it("should attach workspace without errors", function()
+		assert.has_no_errors(function()
+			Api.attached_workspace(1)
+		end)
+	end)
+end)
+
+describe("api.detach_workspace", function()
+	it("should detach workspace without errors", function()
+		assert.has_no_errors(function()
+			Api.detach_workspace()
+		end)
+	end)
+end)
