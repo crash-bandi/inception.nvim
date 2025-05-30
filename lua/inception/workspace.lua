@@ -51,7 +51,6 @@ function Workspace.new(config)
 
 	workspace.id = config.id
 	workspace.name = config.name
-	workspace.state = Workspace.STATE.loaded
 	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.opts or {})
 
 	if workspace.options.multi_root_mode == "disabled" then
@@ -61,6 +60,8 @@ function Workspace.new(config)
 			workspace:add_root_directory(dir)
 		end
 	end
+
+	workspace.state = Workspace.STATE.loaded
 
 	return workspace
 end
@@ -133,9 +134,9 @@ end
 
 function Workspace:desync_cwd()
 	if self.attachment.type == "tab" then
-		vim.cmd("tcd -")
+		vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
 	elseif self.attachment.type == "win" then
-		vim.cmd("lcd -")
+		vim.cmd("cd " .. vim.fn.getcwd(-1, -1))
 	else
 		error("Internal error: Unknown attachment type: " .. self.attachment.type)
 	end
