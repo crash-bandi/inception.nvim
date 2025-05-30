@@ -190,7 +190,7 @@ function Manager:workspace_close(wsid)
 				if current_tabpage ~= attachment.id then
 					vim.api.nvim_set_current_tabpage(attachment.id)
 					vim.cmd("tabclose")
-					vim.uapi.nvim_set_current_tabpage(current_tabpage)
+					vim.api.nvim_set_current_tabpage(current_tabpage)
 				else
 					vim.cmd("tabclose")
 				end
@@ -235,8 +235,14 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
 			self:workspace_buffer_attach(vim.api.nvim_win_get_buf(win), workspace.id)
 		end
+		if vim.api.nvim_get_current_tabpage() == target_id then
+			Manager:workspace_enter(wsid)
+		end
 	elseif target_type == "win" then
 		self:workspace_buffer_attach(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()), workspace.id)
+		if vim.api.nvim_get_current_win() == target_id then
+			Manager:workspace_enter(wsid)
+		end
 	else
 		error("Invalid attachment type: " .. target_type)
 	end
