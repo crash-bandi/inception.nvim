@@ -131,6 +131,16 @@ function Workspace:sync_cwd()
 	end
 end
 
+function Workspace:desync_cwd()
+	if self.attachment.type == "tab" then
+		vim.cmd("tcd -")
+	elseif self.attachment.type == "win" then
+		vim.cmd("lcd -")
+	else
+		error("Internal error: Unknown attachment type: " .. self.attachment.type)
+	end
+end
+
 function Workspace:update_multi_root_flag()
 	error("MULTI-ROOT NOT IMPLEMENTED", vim.log.levels.ERROR)
 	self.multi_root = #self.root_dirs > 1
