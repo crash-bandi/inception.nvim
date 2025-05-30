@@ -76,7 +76,7 @@ end
 function Manager:workspace_unload(wsid)
 	local workspace = self:get_workspace(wsid)
 
-	if workspace.STATE == Workspace.STATE.attached then
+	if workspace.state == Workspace.STATE.attached then
 		self:workspace_close(wsid)
 	end
 
@@ -147,11 +147,10 @@ end
 --- focus on workspace <wsid>
 function Manager:workspace_open(wsid, mode)
 	local workspace = self:get_workspace(wsid)
+	local open_mode = mode or workspace.options.open_mode
 
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
-			local open_mode = mode or workspace.options.open_mode
-
 			local target_id = nil
 			if open_mode == "tab" then
 				vim.cmd("tabnew")
@@ -184,6 +183,7 @@ function Manager:workspace_close(wsid)
 		self:workspace_detach(wsid)
 
 		if attachment.type == "tab" then
+			--- TODO: build test for closing non-active workspace to test going back to original tab
 			if #vim.api.nvim_list_tabpages() > 1 then
 				local current_tabpage = vim.api.nvim_get_current_tabpage()
 				if current_tabpage ~= attachment.id then
@@ -199,7 +199,7 @@ function Manager:workspace_close(wsid)
 				end
 			end
 		elseif attachment.type == "win" then
-			error("NOT IMPLEMENTED")
+			vim.api.nvim_win_close(attachment.id, false)
 		else
 			error("Internal error: close workspace with unknown attachment type.")
 		end
@@ -247,11 +247,13 @@ end
 function Manager:workspace_detach(wsid)
 	local workspace = self:get_workspace(wsid)
 
-	workspace.attachment = nil
+	-- workspace:desync_cwd()
+
 	for _, bufnr in ipairs(vim.deepcopy(workspace.buffers)) do
 		self:workspace_buffer_detach(bufnr, workspace.id)
 	end
 
+	workspace.attachment = nil
 	workspace.state = Workspace.STATE.loaded
 
 	for i, id in ipairs(self.attached_workspaces) do
@@ -403,7 +405,7 @@ function Manager:workspace_buffer_detach(bufnr, wsid)
 	for i, id in ipairs(workspace.buffers) do
 		if id == bufnr then
 			table.remove(workspace.buffers, i)
-			-- break
+			break
 		end
 	end
 end
