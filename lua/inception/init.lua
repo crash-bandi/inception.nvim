@@ -1,4 +1,5 @@
 local config = require("inception.Config")
+require("inception.events")
 
 local M = {}
 
