@@ -4,7 +4,7 @@ function M.active_workspace_cwd()
 	local manager = require("inception.manager")
 
 	if not manager.active_workspace then
-		return "No worpsace"
+		return "No workspace"
 	end
 
 	local cwd = manager:get_workspace(manager.active_workspace).current_working_directory.absolute

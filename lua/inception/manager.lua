@@ -1,23 +1,22 @@
 local Workspace = require("inception.workspace")
+local Buffer = require("inception.buffer")
 local Config = require("inception.config")
 local Utils = require("inception.utils")
-
-vim.api.nvim_create_augroup("InceptionTabTracking", { clear = true })
-vim.api.nvim_create_augroup("InceptionWinTracking", { clear = true })
-vim.api.nvim_create_augroup("InceptionBufferTracking", { clear = true })
 
 ---@class Inception.WorkspaceAttachment
 ---@field type "tab" | "win"
 ---@field id number
 
 ---@class Inception.Manager
----@field workspaces Inception.Workspace[]
----@field name_map table
+---@field workspaces { number: Inception.Workspace }
+---@field buffers { number: Inception.Buffer }
+---@field name_map { string: number }
 ---@field active_workspace number
 ---@field attached_workspaces number[]
 local Manager = {}
 Manager.__index = Manager
 Manager.workspaces = {}
+Manager.buffers = {}
 Manager.name_map = {}
 Manager.active_workspace = nil
 Manager.attached_workspaces = {}
@@ -85,9 +84,29 @@ function Manager:workspace_unload(wsid)
 	self.name_map[workspace.name] = nil
 end
 
+---@param bufnr number
+---@return number | nil
+function Manager:capture_buffer(bufnr)
+	if not self:get_buffer_exists(bufnr) then
+		local buffer = Buffer.new(bufnr)
+		if buffer then
+			self.buffers[buffer.id] = buffer
+			return buffer.id
+		end
+	end
+
+	return bufnr
+end
+
+---@param bufnr number
+function Manager:release_buffer(bufnr)
+	if self:get_buffer_exists(bufnr) then
+		self.buffers[bufnr] = nil
+	end
+end
+
 ---@param wsid number
 ---@return Inception.Workspace
---- Return worksapce <wsid>
 function Manager:get_workspace(wsid)
 	local workspace = self.workspaces[wsid]
 
@@ -98,11 +117,31 @@ function Manager:get_workspace(wsid)
 	error("Invalid workspace id: " .. wsid)
 end
 
+---@param bufnr number
+---@return Inception.Buffer
+function Manager:get_buffer(bufnr)
+	local buffer = self.buffers[bufnr]
+
+	if buffer then
+		return buffer
+	end
+
+	error("Invalid buffer id: " .. bufnr)
+end
+
 ---@param wsid string
 ---@return boolean
 --- Return if workspace <wsid> exists
 function Manager:get_workspace_exists(wsid)
 	local ok, _ = pcall(self.get_workspace, self, wsid)
+	return ok
+end
+
+---@param bufnr number
+---@return boolean
+--- Return if buffer <bufnr> exists
+function Manager:get_buffer_exists(bufnr)
+	local ok, _ = pcall(self.get_buffer, self, bufnr)
 	return ok
 end
 
@@ -233,13 +272,23 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 
 	if target_type == "tab" then
 		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
-			self:workspace_buffer_attach(vim.api.nvim_win_get_buf(win), workspace.id)
+			local bufid = self:capture_buffer(vim.api.nvim_win_get_buf(win))
+
+			if bufid then
+				self:workspace_buffer_attach(bufid, workspace.id)
+			end
 		end
+
 		if vim.api.nvim_get_current_tabpage() == target_id then
 			Manager:workspace_enter(wsid)
 		end
 	elseif target_type == "win" then
-		self:workspace_buffer_attach(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()), workspace.id)
+		local bufid = self:capture_buffer(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()))
+
+		if bufid then
+			self:workspace_buffer_attach(bufid, workspace.id)
+		end
+
 		if vim.api.nvim_get_current_win() == target_id then
 			Manager:workspace_enter(wsid)
 		end
@@ -277,6 +326,12 @@ end
 function Manager:workspace_enter(wsid)
 	local workspace = self:get_workspace(wsid)
 
+	for _, buffer in ipairs(self.buffers) do
+		if not vim.tbl_contains(workspace.buffers, buffer.id) then
+			buffer:set_unlisted()
+		end
+	end
+
 	workspace.state = Workspace.STATE.active
 	self.active_workspace = workspace.id
 	workspace:sync_cwd()
@@ -287,6 +342,10 @@ end
 --- Deactivate workspace <wsid>
 function Manager:workspace_exit(wsid)
 	local workspace = self:get_workspace(wsid)
+
+	for _, buffer in ipairs(self.buffers) do
+		buffer:set_listed()
+	end
 
 	workspace.state = Workspace.STATE.attached
 	self.active_workspace = nil
@@ -319,19 +378,15 @@ end
 ---@param wsid number
 --- Attach buffer <bufnr> to workspace <wsid>
 function Manager:workspace_buffer_attach(bufnr, wsid)
-	if not vim.api.nvim_buf_is_valid(bufnr) then
+	local workspace = self:get_workspace(wsid)
+	local buffer = self:get_buffer(bufnr)
+
+	if vim.tbl_contains(workspace.buffers, bufnr) then
 		return
 	end
 
-	local workspace = self:get_workspace(wsid)
-
-	for _, id in ipairs(workspace.buffers) do
-		if id == bufnr then
-			return
-		end
-	end
-
-	table.insert(workspace.buffers, bufnr)
+	table.insert(workspace.buffers, buffer.id)
+	buffer:buffer_workspace_attach(wsid)
 end
 
 ---@param bufnr number
@@ -339,11 +394,17 @@ end
 -- Detach buffer <bufnr> from workspace <wsid>
 function Manager:workspace_buffer_detach(bufnr, wsid)
 	local workspace = self:get_workspace(wsid)
-	for i, id in ipairs(workspace.buffers) do
-		if id == bufnr then
-			table.remove(workspace.buffers, i)
-			break
+	local buffer = self:get_buffer(bufnr)
+
+	if buffer then
+		for i, buffer_id in ipairs(workspace.buffers) do
+			if buffer_id == buffer.id then
+				table.remove(workspace.buffers, i)
+				break
+			end
 		end
+
+		buffer:buffer_workspace_detach(workspace.id)
 	end
 end
 
@@ -384,7 +445,7 @@ end
 function Manager:handle_win_enter_event(args)
 	for _, workspace in ipairs(self.workspaces) do
 		if workspace.state == Workspace.STATE.attached then
-			if workspace.attachment.type == "win" and workspace.attachment.id == args.tab then
+			if workspace.attachment.type == "win" and workspace.attachment.id == args.win then
 				self:workspace_enter(workspace.id)
 				break
 			end
@@ -414,7 +475,9 @@ end
 ---@param args { buf: number }
 --- Handler for new buffer event
 function Manager:handle_new_buffer_event(args)
-	if self.active_workspace then
+	local bufid = self:capture_buffer(args.buf)
+
+	if bufid and self.active_workspace then
 		self:workspace_buffer_attach(args.buf, self.active_workspace)
 	end
 end
@@ -425,64 +488,8 @@ function Manager:handle_buffer_wipeout(args)
 	for _, wsid in ipairs(self.attached_workspaces) do
 		self:workspace_buffer_detach(args.buf, wsid)
 	end
+
+	self:release_buffer(args.buf)
 end
-
-----------------------------------------------------
-
-vim.api.nvim_create_autocmd("TabEnter", {
-	group = "InceptionTabTracking",
-	callback = function()
-		require("inception.manager"):handle_tabpage_enter_event({ tab = vim.api.nvim_get_current_tabpage() })
-	end,
-})
-
-vim.api.nvim_create_autocmd("TabLeave", {
-	group = "InceptionTabTracking",
-	callback = function()
-		require("inception.manager"):handle_tabpage_leave_event({ tab = vim.api.nvim_get_current_tabpage() })
-	end,
-})
-
-vim.api.nvim_create_autocmd("TabClosed", {
-	group = "InceptionTabTracking",
-	callback = function()
-		require("inception.manager"):handle_tabpage_closed_event()
-	end,
-})
-
-vim.api.nvim_create_autocmd("WinEnter", {
-	group = "InceptionWinTracking",
-	callback = function()
-		require("inception.manager"):handle_tabpage_enter_event({ win = vim.api.nvim_get_current_win() })
-	end,
-})
-
-vim.api.nvim_create_autocmd("WinLeave", {
-	group = "InceptionWinTracking",
-	callback = function()
-		require("inception.manager"):handle_win_leave_event({ win = vim.api.nvim_get_current_win() })
-	end,
-})
-
-vim.api.nvim_create_autocmd("WinClosed", {
-	group = "InceptionWinTracking",
-	callback = function()
-		require("inception.manager"):handle_win_closed_event()
-	end,
-})
-
-vim.api.nvim_create_autocmd("BufNew", {
-	group = "InceptionBufferTracking",
-	callback = function(args)
-		require("inception.manager"):handle_new_buffer_event(args)
-	end,
-})
-
-vim.api.nvim_create_autocmd("BufWipeout", {
-	group = "InceptionBufferTracking",
-	callback = function(args)
-		require("inception.manager"):handle_buffer_wipeout(args)
-	end,
-})
 
 return Manager

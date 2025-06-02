@@ -1,3 +1,4 @@
+require("inception.init")
 local Manager = require("inception.manager")
 local Utils = require("inception.utils")
 

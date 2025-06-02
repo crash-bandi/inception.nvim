@@ -1,3 +1,4 @@
+require("inception.init")
 local Api = require("inception.api")
 local Manager = require("inception.manager")
 
