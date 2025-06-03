@@ -1,3 +1,6 @@
+--- TODO: build test for closing non-active workspace to test going back to original tab
+--- TODO: rebuild test for attaching unattached buffer
+
 require("inception.init")
 local Manager = require("inception.manager")
 local Utils = require("inception.utils")
@@ -8,7 +11,7 @@ local ws_default_opts = require("inception.workspace")._new.options
 local current_dir = vim.fn.getcwd()
 
 local function cleanup()
-	for _, workspace in ipairs(Manager.workspaces) do
+	for _, workspace in pairs(Manager.workspaces) do
 		Manager:workspace_unload(workspace.id)
 	end
 
@@ -36,7 +39,7 @@ describe("Manager.workspace_create:", function()
 	local name = "test1"
 
 	after_each(function()
-		for _, workspace in ipairs(Manager.workspaces) do
+		for _, workspace in pairs(Manager.workspaces) do
 			Manager:workspace_unload(workspace.id)
 		end
 	end)
@@ -49,6 +52,7 @@ describe("Manager.workspace_create:", function()
 			options = ws_default_opts,
 			current_working_directory = Utils.normalize_file_path(current_dir),
 			root_dirs = { Utils.normalize_file_path(current_dir) },
+			buffers = {},
 		}, Manager:workspace_create(name, current_dir))
 	end)
 
@@ -60,6 +64,7 @@ describe("Manager.workspace_create:", function()
 			options = ws_default_opts,
 			current_working_directory = Utils.normalize_file_path("~"),
 			root_dirs = { Utils.normalize_file_path("~") },
+			buffers = {},
 		}, Manager:workspace_create(name, "~"))
 	end)
 
@@ -73,6 +78,7 @@ describe("Manager.workspace_create:", function()
 			options = custom_opts,
 			current_working_directory = Utils.normalize_file_path(current_dir),
 			root_dirs = { Utils.normalize_file_path(current_dir) },
+			buffers = {},
 		}, Manager:workspace_create(name, current_dir, custom_opts))
 	end)
 
@@ -119,7 +125,7 @@ end)
 
 describe("Manager.workspace_rename:", function()
 	after_each(function()
-		for _, workspace in ipairs(Manager.workspaces) do
+		for _, workspace in pairs(Manager.workspaces) do
 			Manager:workspace_unload(workspace.id)
 		end
 	end)
@@ -154,6 +160,7 @@ describe("Manager.workspace_open:", function()
 	local winworkspace = Manager:workspace_create("wintest1", current_dir)
 	local tabworkspace = Manager:workspace_create("tabtest1", current_dir)
 	local external_buf = vim.api.nvim_create_buf(true, false)
+	local unlisted_buf = vim.api.nvim_create_buf(false, false)
 
 	it("win should open workspace without errors", function()
 		assert.has_no.errors(function()
@@ -162,7 +169,7 @@ describe("Manager.workspace_open:", function()
 	end)
 
 	it("win workspace should be in manager's attached workspaces list", function()
-		assert.is_true(Utils.contains(Manager.attached_workspaces, winworkspace.id))
+		assert.is_true(vim.tbl_contains(Manager.attached_workspaces, winworkspace.id))
 	end)
 
 	it("win workspace should be manager's active workspace", function()
@@ -179,8 +186,15 @@ describe("Manager.workspace_open:", function()
 	end)
 
 	it("win workspace should have current buffer attached", function()
-		local buf = vim.api.nvim_get_current_buf()
-		assert.are.same({ buf }, winworkspace.buffers)
+		local bufs = vim.tbl_map(
+			function(item)
+				return item.bufnr
+			end,
+			vim.tbl_filter(function(item)
+				return item.listed == 1 and item.loaded == 1
+			end, vim.fn.getbufinfo())
+		)
+		assert.are.same(bufs, winworkspace.buffers)
 	end)
 
 	it("win cwd synced with workspace root directory", function()
@@ -203,7 +217,7 @@ describe("Manager.workspace_open:", function()
 	end)
 
 	it("tab workspace should be in manager's attached workspaces list", function()
-		assert.is_true(Utils.contains(Manager.attached_workspaces, tabworkspace.id))
+		assert.is_true(vim.tbl_contains(Manager.attached_workspaces, tabworkspace.id))
 	end)
 
 	it("tab workspace should be manager's active workspace", function()
@@ -220,8 +234,15 @@ describe("Manager.workspace_open:", function()
 	end)
 
 	it("tab workspace should have current buffer attached", function()
-		local buf = vim.api.nvim_get_current_buf()
-		assert.are.same({ buf }, tabworkspace.buffers)
+		local bufs = vim.tbl_map(
+			function(item)
+				return item.bufnr
+			end,
+			vim.tbl_filter(function(item)
+				return item.listed == 1 and item.loaded == 1
+			end, vim.fn.getbufinfo())
+		)
+		assert.are.same(bufs, tabworkspace.buffers)
 	end)
 
 	it("tabpage cwd synced with workspace root directory", function()
@@ -238,28 +259,28 @@ describe("Manager.workspace_open:", function()
 	end)
 
 	it("workspace did not attach out of scope buffer", function()
-		assert.is_not_true(Utils.contains(tabworkspace.buffers, external_buf))
+		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, unlisted_buf))
 	end)
 
 	it("workspace captures new buffer", function()
 		local new_buf = vim.api.nvim_create_buf(true, false)
-		assert.is_true(Utils.contains(tabworkspace.buffers, new_buf))
+		assert.is_true(vim.tbl_contains(tabworkspace.buffers, new_buf))
 	end)
 
 	it("workspace can attach existing buffer", function()
 		Manager:workspace_buffer_attach(external_buf, tabworkspace.id)
-		assert.is_true(Utils.contains(tabworkspace.buffers, external_buf))
+		assert.is_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
 	end)
 
 	it("workspace can detach buffer", function()
 		Manager:workspace_buffer_detach(external_buf, tabworkspace.id)
-		assert.is_not_true(Utils.contains(tabworkspace.buffers, external_buf))
+		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
 	end)
 
 	it("workspace should remove buffer when buffer is closed", function()
 		Manager:workspace_buffer_attach(external_buf, tabworkspace.id)
 		vim.api.nvim_buf_delete(external_buf, { force = true })
-		assert.is_not_true(Utils.contains(tabworkspace.buffers, external_buf))
+		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
 	end)
 end)
 
@@ -277,7 +298,7 @@ describe("Manager.workspace_close:", function()
 	end)
 
 	it("win workspace should not be in manager's attached workspaces list", function()
-		assert.is_not_true(Utils.contains(Manager.attached_workspaces, winworkspace.id))
+		assert.is_not_true(vim.tbl_contains(Manager.attached_workspaces, winworkspace.id))
 	end)
 
 	it("win workspace should not be manager's active workspace", function()
@@ -285,7 +306,7 @@ describe("Manager.workspace_close:", function()
 	end)
 
 	it("win workspace should have closed attached window", function()
-		assert.is_not_true(Utils.contains(vim.api.nvim_list_wins(), win_current_attachment.id))
+		assert.is_not_true(vim.tbl_contains(vim.api.nvim_list_wins(), win_current_attachment.id))
 	end)
 
 	it("win workspace state should be 'loaded'", function()
@@ -311,7 +332,7 @@ describe("Manager.workspace_close:", function()
 	end)
 
 	it("tab workspace should not be in manager's attached workspaces list", function()
-		assert.is_not_true(Utils.contains(Manager.attached_workspaces, tabworkspace.id))
+		assert.is_not_true(vim.tbl_contains(Manager.attached_workspaces, tabworkspace.id))
 	end)
 
 	it("tab workspace should not be manager's active workspace", function()
@@ -319,7 +340,7 @@ describe("Manager.workspace_close:", function()
 	end)
 
 	it("tab workspace should have closed attached tab", function()
-		assert.is_not_true(Utils.contains(vim.api.nvim_list_tabpages(), tab_current_attachment.id))
+		assert.is_not_true(vim.tbl_contains(vim.api.nvim_list_tabpages(), tab_current_attachment.id))
 	end)
 
 	it("tab workspace state should be 'loaded'", function()
@@ -443,7 +464,7 @@ describe("Manager.workspace_detach (tab):", function()
 	end)
 
 	it("workspace should not be in Manager attached workspaces", function()
-		assert.is_not_true(Utils.contains(Manager.attached_workspaces, workspace.id))
+		assert.is_not_true(vim.tbl_contains(Manager.attached_workspaces, workspace.id))
 	end)
 
 	it("workspace should not be Manager active workspace", function()
@@ -472,7 +493,7 @@ describe("Manager.workspace_detach:", function()
 	end)
 
 	it("workspace should not be in Manager attached workspaces", function()
-		assert.is_not_true(Utils.contains(Manager.attached_workspaces, workspace.id))
+		assert.is_not_true(vim.tbl_contains(Manager.attached_workspaces, workspace.id))
 	end)
 
 	it("workspace should not be Manager active workspace", function()
