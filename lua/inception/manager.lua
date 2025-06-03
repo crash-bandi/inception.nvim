@@ -89,13 +89,12 @@ end
 function Manager:capture_buffer(bufnr)
 	if not self:get_buffer_exists(bufnr) then
 		local buffer = Buffer.new(bufnr)
-		if buffer then
-			self.buffers[buffer.id] = buffer
-			return buffer.id
+		if not buffer then
+			return
 		end
+		self.buffers[buffer.id] = buffer
+		return buffer.id
 	end
-
-  print("buffer exists " .. bufnr)
 
 	return bufnr
 end
@@ -278,7 +277,7 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 
 			if bufid then
 				self:workspace_buffer_attach(bufid, workspace.id)
-			end
+      end
 		end
 
 		if vim.api.nvim_get_current_tabpage() == target_id then
@@ -328,11 +327,16 @@ end
 function Manager:workspace_enter(wsid)
 	local workspace = self:get_workspace(wsid)
 
+  print("before buffer loop")
+  print("buffer count " .. #self.buffers)
 	for _, buffer in ipairs(self.buffers) do
+    print("checking if " .. buffer.id .. " is attached to " .. workspace.name)
 		if not vim.tbl_contains(workspace.buffers, buffer.id) then
-			buffer:set_unlisted()
+      print("unlist buffer " .. buffer.id)
+      buffer:set_unlisted()
 		end
 	end
+  print("after buffer loop")
 
 	workspace.state = Workspace.STATE.active
 	self.active_workspace = workspace.id
@@ -344,8 +348,8 @@ end
 --- Deactivate workspace <wsid>
 function Manager:workspace_exit(wsid)
 	local workspace = self:get_workspace(wsid)
-
 	for _, buffer in ipairs(self.buffers) do
+      print("list buffer " .. buffer.id)
 		buffer:set_listed()
 	end
 
@@ -369,10 +373,10 @@ function Manager:focus_on_workspace(wsid)
 			error("Internal error: close workspace with unknown attachment type.")
 		end
 
-		if self.active_workspace then
-			self:workspace_exit(self.active_workspace)
-		end
-		self:workspace_enter(workspace.id)
+		-- if self.active_workspace then
+		-- 	self:workspace_exit(self.active_workspace)
+		-- end
+		-- self:workspace_enter(workspace.id)
 	end
 end
 
@@ -398,16 +402,14 @@ function Manager:workspace_buffer_detach(bufnr, wsid)
 	local workspace = self:get_workspace(wsid)
 	local buffer = self:get_buffer(bufnr)
 
-	if buffer then
-		for i, buffer_id in ipairs(workspace.buffers) do
-			if buffer_id == buffer.id then
-				table.remove(workspace.buffers, i)
-				break
-			end
+	for i, bufid in ipairs(workspace.buffers) do
+		if bufid == buffer.id then
+			table.remove(workspace.buffers, i)
+			break
 		end
-
-		buffer:buffer_workspace_detach(workspace.id)
 	end
+
+	buffer:buffer_workspace_detach(workspace.id)
 end
 
 ---@param args { tab: number }
@@ -455,10 +457,14 @@ function Manager:handle_win_enter_event(args)
 	end
 end
 
+---@param args { win: number }
 --- Handler for win enter event
-function Manager:handle_win_leave_event()
+function Manager:handle_win_leave_event(args)
 	if self.active_workspace then
-		self:workspace_exit(Manager.active_workspace)
+		local workspace = self:get_workspace(self.active_workspace)
+		if workspace.attachment.type == "win" and workspace.attachment.id == args.win then
+			self:workspace_exit(Manager.active_workspace)
+		end
 	end
 end
 
@@ -479,8 +485,6 @@ end
 function Manager:handle_new_buffer_event(args)
 	local bufid = self:capture_buffer(args.buf)
 
-  print(bufid)
-
 	if bufid and self.active_workspace then
 		self:workspace_buffer_attach(args.buf, self.active_workspace)
 	end
@@ -489,11 +493,13 @@ end
 ---@param args { buf: number }
 --- Handler for close buffer events
 function Manager:handle_buffer_wipeout(args)
-	for _, wsid in ipairs(self.attached_workspaces) do
-		self:workspace_buffer_detach(args.buf, wsid)
-	end
+	if self:get_buffer_exists(args.buf) then
+		for _, wsid in ipairs(self.attached_workspaces) do
+			self:workspace_buffer_detach(args.buf, wsid)
+		end
 
-	self:release_buffer(args.buf)
+		self:release_buffer(args.buf)
+	end
 end
 
 return Manager
