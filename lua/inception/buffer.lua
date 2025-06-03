@@ -28,7 +28,7 @@ end
 
 function Buffer:set_unlisted()
 	vim.api.nvim_set_option_value("buflisted", false, { buf = self.id })
-	self.visibile = false
+	self.visible = false
 end
 
 ---@param wsid number
@@ -38,7 +38,7 @@ end
 
 ---@param wsid number
 function Buffer:buffer_workspace_detach(wsid)
-	for i, id in ipairs(self.workspaces) do
+	for i, id in pairs(self.workspaces) do
 		if id == wsid then
 			table.remove(self.workspaces, i)
 			break

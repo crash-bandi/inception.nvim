@@ -224,7 +224,6 @@ function Manager:workspace_close(wsid)
 		self:workspace_detach(wsid)
 
 		if attachment.type == "tab" then
-			--- TODO: build test for closing non-active workspace to test going back to original tab
 			if #vim.api.nvim_list_tabpages() > 1 then
 				local current_tabpage = vim.api.nvim_get_current_tabpage()
 				if current_tabpage ~= attachment.id then
@@ -269,32 +268,55 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 	table.insert(self.attached_workspaces, workspace.id)
 	workspace.state = Workspace.STATE.attached
 
-	workspace.buffers = {}
+  local buffers_to_assign = {}
 
-	if target_type == "tab" then
-		for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
-			local bufid = self:capture_buffer(vim.api.nvim_win_get_buf(win))
+	for _, buffer in ipairs(vim.fn.getbufinfo()) do
+		local capture = false
+
+		if self:get_buffer_exists(buffer.bufnr) then
+			local b = self:get_buffer(buffer.bufnr)
+
+			if #b.workspaces == 0 then
+				table.insert(buffers_to_assign, b.id)
+			end
+		else
+			if buffer.listed == 1 then
+				if Config.options.buffer_capture_method == "listed" then
+					capture = true
+				elseif Config.options.buffer_capture_method == "loaded" and buffer.loaded == 1 then
+					capture = true
+				elseif Config.options.buffer_capture_method == "opened" then
+					if target_type == "tab" then
+						for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
+							if vim.api.nvim_win_get_buf(win) == buffer.bufnr then
+								capture = true
+								break
+							end
+						end
+					elseif target_type == "win" then
+						if vim.api.nvim_win_get_buf(target_id) == buffer.bufnr then
+							capture = true
+						end
+					else
+						error("Invalid attachment type: " .. target_type)
+					end
+				else
+					error("Invalid buffer capture method: " .. Config.options.buffer_capture_method)
+				end
+			end
+		end
+
+		if capture then
+			local bufid = self:capture_buffer(buffer.bufnr)
 
 			if bufid then
-				self:workspace_buffer_attach(bufid, workspace.id)
-      end
+				table.insert(buffers_to_assign, bufid)
+			end
 		end
+	end
 
-		if vim.api.nvim_get_current_tabpage() == target_id then
-			Manager:workspace_enter(wsid)
-		end
-	elseif target_type == "win" then
-		local bufid = self:capture_buffer(vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()))
-
-		if bufid then
-			self:workspace_buffer_attach(bufid, workspace.id)
-		end
-
-		if vim.api.nvim_get_current_win() == target_id then
-			Manager:workspace_enter(wsid)
-		end
-	else
-		error("Invalid attachment type: " .. target_type)
+	for _, bufid in ipairs(buffers_to_assign) do
+		self:workspace_buffer_attach(bufid, workspace.id)
 	end
 end
 
@@ -327,16 +349,11 @@ end
 function Manager:workspace_enter(wsid)
 	local workspace = self:get_workspace(wsid)
 
-  print("before buffer loop")
-  print("buffer count " .. #self.buffers)
-	for _, buffer in ipairs(self.buffers) do
-    print("checking if " .. buffer.id .. " is attached to " .. workspace.name)
+	for _, buffer in pairs(self.buffers) do
 		if not vim.tbl_contains(workspace.buffers, buffer.id) then
-      print("unlist buffer " .. buffer.id)
-      buffer:set_unlisted()
+			buffer:set_unlisted()
 		end
 	end
-  print("after buffer loop")
 
 	workspace.state = Workspace.STATE.active
 	self.active_workspace = workspace.id
@@ -348,8 +365,7 @@ end
 --- Deactivate workspace <wsid>
 function Manager:workspace_exit(wsid)
 	local workspace = self:get_workspace(wsid)
-	for _, buffer in ipairs(self.buffers) do
-      print("list buffer " .. buffer.id)
+	for _, buffer in pairs(self.buffers) do
 		buffer:set_listed()
 	end
 
@@ -373,10 +389,9 @@ function Manager:focus_on_workspace(wsid)
 			error("Internal error: close workspace with unknown attachment type.")
 		end
 
-		-- if self.active_workspace then
-		-- 	self:workspace_exit(self.active_workspace)
-		-- end
-		-- self:workspace_enter(workspace.id)
+		if workspace.state ~= Workspace.STATE.active then
+			self:workspace_enter(workspace.id)
+		end
 	end
 end
 
@@ -415,14 +430,17 @@ end
 ---@param args { tab: number }
 --- Handler for tabpage enter event
 function Manager:handle_tabpage_enter_event(args)
-	for _, workspace in ipairs(self.workspaces) do
+	for _, workspace in pairs(self.workspaces) do
 		if workspace.state == Workspace.STATE.attached then
 			if workspace.attachment.type == "tab" and workspace.attachment.id == args.tab then
 				self:workspace_enter(workspace.id)
-				break
+				return
 			end
 		end
 	end
+
+  --- if tab is not a workspace, trigger DirChanged event of other plugins
+  vim.api.nvim_exec_autocmds("DirChanged", {})
 end
 
 --- Handler for tabpage enter event
@@ -435,9 +453,9 @@ end
 --- Handler for tabpage enter event
 function Manager:handle_tabpage_closed_event()
 	local current_tabpages = vim.api.nvim_list_tabpages()
-	for _, workspace in ipairs(self.workspaces) do
+	for _, workspace in pairs(self.workspaces) do
 		if workspace.attachment and workspace.attachment.type == "tab" then
-			if not Utils.contains(current_tabpages, workspace.attachment.id) then
+			if not vim.tbl_contains(current_tabpages, workspace.attachment.id) then
 				self:workspace_detach(workspace.id)
 			end
 		end
@@ -447,14 +465,17 @@ end
 ---@param args { win: number }
 --- Handler for win enter event
 function Manager:handle_win_enter_event(args)
-	for _, workspace in ipairs(self.workspaces) do
+	for _, workspace in pairs(self.workspaces) do
 		if workspace.state == Workspace.STATE.attached then
 			if workspace.attachment.type == "win" and workspace.attachment.id == args.win then
 				self:workspace_enter(workspace.id)
-				break
+				return
 			end
 		end
 	end
+
+  --- if win is not a workspace, trigger DirChanged event of other plugins
+  vim.api.nvim_exec_autocmds("DirChanged", {})
 end
 
 ---@param args { win: number }
@@ -471,9 +492,9 @@ end
 --- Handler for win enter event
 function Manager:handle_win_closed_event()
 	local current_wins = vim.api.nvim_list_wins()
-	for _, workspace in ipairs(self.workspaces) do
+	for _, workspace in pairs(self.workspaces) do
 		if workspace.attachment and workspace.attachment.type == "win" then
-			if not Utils.contains(current_wins, workspace.attachment.id) then
+			if not vim.tbl_contains(current_wins, workspace.attachment.id) then
 				self:workspace_detach(workspace.id)
 			end
 		end

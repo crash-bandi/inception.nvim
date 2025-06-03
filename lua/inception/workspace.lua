@@ -24,6 +24,7 @@ Workspace.__index = Workspace
 
 Workspace._new = {
 	root_dirs = {},
+	buffers = {},
 	---@type Inception.WorkspaceOptions
 	options = {
 		open_mode = "tab",

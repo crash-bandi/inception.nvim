@@ -28,7 +28,7 @@ vim.api.nvim_create_autocmd("TabClosed", {
 vim.api.nvim_create_autocmd("WinEnter", {
 	group = "InceptionWinTracking",
 	callback = function()
-		Manager:handle_tabpage_enter_event({ win = vim.api.nvim_get_current_win() })
+		Manager:handle_win_enter_event({ win = vim.api.nvim_get_current_win() })
 	end,
 })
 

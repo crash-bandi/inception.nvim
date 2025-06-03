@@ -23,7 +23,7 @@ end
 function api.list_workspaces()
 	local wsids = {}
 
-	for _, workspace in ipairs(Manager.workspaces) do
+	for _, workspace in pairs(Manager.workspaces) do
 		table.insert(wsids, workspace.id)
 	end
 
