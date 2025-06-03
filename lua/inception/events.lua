@@ -35,7 +35,7 @@ vim.api.nvim_create_autocmd("WinEnter", {
 vim.api.nvim_create_autocmd("WinLeave", {
 	group = "InceptionWinTracking",
 	callback = function()
-		Manager:handle_win_leave_event()
+		Manager:handle_win_leave_event({ win = vim.api.nvim_get_current_win() })
 	end,
 })
 
@@ -59,4 +59,3 @@ vim.api.nvim_create_autocmd("BufWipeout", {
 		Manager:handle_buffer_wipeout(args)
 	end,
 })
-

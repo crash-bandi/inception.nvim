@@ -75,7 +75,7 @@ end
 ---@param wsid number workspace number
 ---@param target_type? "tab" | "win"
 ---@param target_id? number
-function api.attached_workspace(wsid, target_type, target_id)
+function api.attach_workspace(wsid, target_type, target_id)
 	local ok, ret = pcall(Manager.get_workspace, Manager, wsid)
 
 	if not ok then

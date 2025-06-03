@@ -8,13 +8,7 @@ Buffer.__index = Buffer
 ---@param bufnr number
 ---@return Inception.Buffer | nil
 function Buffer.new(bufnr)
-  print("new buffer " .. bufnr)
 	if not vim.api.nvim_buf_is_valid(bufnr) or vim.api.nvim_get_option_value("buflisted", { buf = bufnr }) == false then
-    print("skipping buf new " .. bufnr)
-    print("valid:")
-    print(vim.inspect(vim.api.nvim_buf_is_valid(bufnr)))
-    print("set_listed:")
-    print(vim.inspect(vim.api.nvim_get_option_value("buflisted", {buf = bufnr})))
 		return
 	end
 
