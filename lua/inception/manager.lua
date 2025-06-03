@@ -95,6 +95,8 @@ function Manager:capture_buffer(bufnr)
 		end
 	end
 
+  print("buffer exists " .. bufnr)
+
 	return bufnr
 end
 
@@ -476,6 +478,8 @@ end
 --- Handler for new buffer event
 function Manager:handle_new_buffer_event(args)
 	local bufid = self:capture_buffer(args.buf)
+
+  print(bufid)
 
 	if bufid and self.active_workspace then
 		self:workspace_buffer_attach(args.buf, self.active_workspace)
