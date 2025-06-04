@@ -21,7 +21,6 @@ local Utils = require("inception.utils")
 ---@field options Inception.WorkspaceOptions
 local Workspace = {}
 Workspace.__index = Workspace
-
 Workspace._new = {
 	root_dirs = {},
 	buffers = {},
