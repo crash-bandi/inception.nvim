@@ -11,8 +11,7 @@ local Api = require("inception.api")
 ---@class Inception.Picker
 ---@field opts Inception.PickerOptions
 local UI = {}
-UI.__index = UI
-
+UI.__index = U
 UI._new = {
 	opts = {
 		prompt = "Select",
@@ -39,21 +38,21 @@ end
 
 ---@param opts? Inception.PickerOptions
 UI.open_workspace = function(opts)
-  if #Manager.workspaces == 0 then
-    vim.notify("No workspaces loaded", vim.log.levels.INFO)
-    return
-  end
+	if #Manager.workspaces == 0 then
+		vim.notify("No workspaces loaded", vim.log.levels.INFO)
+		return
+	end
 
 	local options = {
 		finder = Manager.workspaces,
 		formatter = function(item)
-      return string.format("%-20s %s", item.name, item.id)
+			return string.format("%-20s %s", item.name, item.id)
 		end,
-    prompt = "Workspaces",
+		prompt = "Workspaces",
 		on_choice = function(selected)
-      if not selected then
-        return
-      end
+			if not selected then
+				return
+			end
 			Api.open_workspace(selected.id)
 		end,
 	}
