@@ -11,7 +11,7 @@ local Api = require("inception.api")
 ---@class Inception.Picker
 ---@field opts Inception.PickerOptions
 local UI = {}
-UI.__index = U
+UI.__index = UI
 UI._new = {
 	opts = {
 		prompt = "Select",
