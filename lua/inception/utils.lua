@@ -1,7 +1,7 @@
 local Utils = {}
 
 ---@param path string
----@return Inception.WorkspaceRootDir
+---@return Inception.Workspace.RootDir
 function Utils.normalize_file_path(path)
 	local absolute = vim.fn.fnamemodify(path, ":p")
 	local escaped = vim.fn.fnameescape(absolute)

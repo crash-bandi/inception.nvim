@@ -1,3 +1,5 @@
+local Workspace = require("inception.workspace")
+
 ---@class Inception.Portal
 ---@field windows {number: Inception.Portal.Window}
 ---@field workspace_windows {number: number}
@@ -12,7 +14,7 @@ Portal.__index = Portal
 ---@field workspace number
 ---@field state Inception.Portal.WindowState
 ---@field mode Inception.Portal.WindowMode
----@field opts table
+---@field options table
 ---@field winid? number
 local PortalWindow = {}
 PortalWindow.__index = PortalWindow
@@ -32,7 +34,7 @@ PortalWindow.MODE = {
 PortalWindow._new = {
 	state = PortalWindow.STATE.closed,
 	mode = PortalWindow.MODE.readonly,
-	opts = {
+	options = {
 		relative = "editor",
 		width = 60,
 		height = 20,
@@ -74,9 +76,9 @@ function Portal:window_create(workspace)
 	local window = setmetatable(vim.deepcopy(PortalWindow._new), PortalWindow)
 
   local tabpage = nil
-  if workspace.attachment.type == "tab" then
+  if workspace.attachment.type == Workspace.ATTACHMENT_TYPE.tab then
     tabpage = workspace.attachment.id
-  elseif workspace.attachment.type == "win" then
+  elseif workspace.attachment.type == Workspace.ATTACHMENT_TYPE.window then
     tabpage = vim.api.nvim_win_get_tabpage(workspace.attachment.id)
   else
     error("Invalid workspace attachment type: " .. workspace.attachment.type)
@@ -87,7 +89,7 @@ function Portal:window_create(workspace)
     error("Cannot create a portal window on an inactive workspace")
   end
 
-	window.id = vim.api.nvim_open_win(Portal.buffer, true, window.opts)
+	window.id = vim.api.nvim_open_win(Portal.buffer, true, window.options)
 	window.workspace = workspace.id
 
 	self.windows[window.id] = window

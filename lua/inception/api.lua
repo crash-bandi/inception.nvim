@@ -5,7 +5,7 @@ local api = {}
 
 ---@param name string workspace name
 ---@param dirs? string | string[] workspace root directories
----@param opts? Inception.WorkspaceOptions Wokrspace options
+---@param opts? Inception.Workspace.Options Wokrspace options
 ---@return number | nil wsid workspace id
 function api.create_new_workspace(name, dirs, opts)
 	dirs = dirs or vim.fn.getcwd(-1)
@@ -73,8 +73,8 @@ function api.close_workspace(wsid)
 end
 
 ---@param wsid number workspace number
----@param target_type? "tab" | "win"
----@param target_id? number
+---@param target_type? Inception.Workspace.Attachment.Type
+------@param target_id? number
 function api.attach_workspace(wsid, target_type, target_id)
 	local ok, ret = pcall(Manager.get_workspace, Manager, wsid)
 
