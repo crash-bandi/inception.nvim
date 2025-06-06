@@ -136,7 +136,7 @@ function Workspace:desync_cwd()
 	if self.attachment.type == "tab" then
 		vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
 	elseif self.attachment.type == "win" then
-		vim.cmd("cd " .. vim.fn.getcwd(-1, -1))
+		vim.cmd("lcd " .. vim.fn.getcwd(-1, -1))
 	else
 		error("Internal error: Unknown attachment type: " .. self.attachment.type)
 	end

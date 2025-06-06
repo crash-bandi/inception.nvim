@@ -1,5 +1,5 @@
 local Workspace = require("inception.workspace")
-local Buffer = require("inception.buffer")
+local Buffer = require("inception.component").Buffer
 local Config = require("inception.config")
 local Utils = require("inception.utils")
 
@@ -9,7 +9,7 @@ local Utils = require("inception.utils")
 
 ---@class Inception.Manager
 ---@field workspaces { number: Inception.Workspace }
----@field buffers { number: Inception.Buffer }
+---@field buffers { number: Inception.Component.Buffer }
 ---@field name_map { string: number }
 ---@field active_workspace number
 ---@field attached_workspaces number[]
@@ -88,7 +88,7 @@ end
 ---@return number | nil
 function Manager:capture_buffer(bufnr)
 	if not self:get_buffer_exists(bufnr) then
-		local buffer = Buffer.new(bufnr)
+		local buffer = Buffer:new(bufnr)
 		if not buffer then
 			return
 		end
@@ -119,7 +119,7 @@ function Manager:get_workspace(wsid)
 end
 
 ---@param bufnr number
----@return Inception.Buffer
+---@return Inception.Component.Buffer
 function Manager:get_buffer(bufnr)
 	local buffer = self.buffers[bufnr]
 
@@ -268,7 +268,7 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 	table.insert(self.attached_workspaces, workspace.id)
 	workspace.state = Workspace.STATE.attached
 
-  local buffers_to_assign = {}
+	local buffers_to_assign = {}
 
 	for _, buffer in ipairs(vim.fn.getbufinfo()) do
 		local capture = false
@@ -351,7 +351,7 @@ function Manager:workspace_enter(wsid)
 
 	for _, buffer in pairs(self.buffers) do
 		if not vim.tbl_contains(workspace.buffers, buffer.id) then
-			buffer:set_unlisted()
+			buffer:set_invisible()
 		end
 	end
 
@@ -366,7 +366,7 @@ end
 function Manager:workspace_exit(wsid)
 	local workspace = self:get_workspace(wsid)
 	for _, buffer in pairs(self.buffers) do
-		buffer:set_listed()
+		buffer:set_visible()
 	end
 
 	workspace.state = Workspace.STATE.attached
@@ -407,7 +407,7 @@ function Manager:workspace_buffer_attach(bufnr, wsid)
 	end
 
 	table.insert(workspace.buffers, buffer.id)
-	buffer:buffer_workspace_attach(wsid)
+	buffer:workspace_attach(wsid)
 end
 
 ---@param bufnr number
@@ -424,7 +424,7 @@ function Manager:workspace_buffer_detach(bufnr, wsid)
 		end
 	end
 
-	buffer:buffer_workspace_detach(workspace.id)
+	buffer:workspace_detach(workspace.id)
 end
 
 ---@param args { tab: number }
@@ -439,8 +439,8 @@ function Manager:handle_tabpage_enter_event(args)
 		end
 	end
 
-  --- if tab is not a workspace, trigger DirChanged event of other plugins
-  vim.api.nvim_exec_autocmds("DirChanged", {})
+	--- if tab is not a workspace, trigger DirChanged event of other plugins
+	vim.api.nvim_exec_autocmds("DirChanged", {})
 end
 
 --- Handler for tabpage enter event
@@ -474,8 +474,8 @@ function Manager:handle_win_enter_event(args)
 		end
 	end
 
-  --- if win is not a workspace, trigger DirChanged event of other plugins
-  vim.api.nvim_exec_autocmds("DirChanged", {})
+	--- if win is not a workspace, trigger DirChanged event of other plugins
+	vim.api.nvim_exec_autocmds("DirChanged", {})
 end
 
 ---@param args { win: number }
