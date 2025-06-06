@@ -9,35 +9,35 @@ local Api = require("inception.api")
 ---@field on_choice fun(item: any, idx: integer?):any?
 
 ---@class Inception.Picker
----@field opts Inception.PickerOptions
+---@field options Inception.PickerOptions
 local UI = {}
 UI.__index = UI
 UI._new = {
-	opts = {
+	options = {
 		prompt = "Select",
 	},
 }
 
----@param opts Inception.PickerOptions
+---@param options Inception.PickerOptions
 ---@return Inception.Picker
-function UI.new_picker(opts)
+function UI.new_picker(options)
 	local ui = setmetatable(vim.deepcopy(UI._new), UI)
-	ui.opts = vim.tbl_deep_extend("force", ui.opts, opts or {})
+	ui.options = vim.tbl_deep_extend("force", ui.options, options or {})
 
 	return ui
 end
 
 function UI:render()
 	---@diagnostic disable-next-line:param-type-mismatch
-	vim.ui.select(self.opts.finder, {
-		prompt = self.opts.prompt,
-		format_item = self.opts.formatter,
-		kind = self.opts.kind,
-	}, self.opts.on_choice)
+	vim.ui.select(self.options.finder, {
+		prompt = self.options.prompt,
+		format_item = self.options.formatter,
+		kind = self.options.kind,
+	}, self.options.on_choice)
 end
 
----@param opts? Inception.PickerOptions
-UI.open_workspace = function(opts)
+---@param options? Inception.PickerOptions
+UI.open_workspace = function(options)
 	if #Manager.workspaces == 0 then
 		vim.notify("No workspaces loaded", vim.log.levels.INFO)
 		return
@@ -57,7 +57,7 @@ UI.open_workspace = function(opts)
 		end,
 	}
 
-	opts = vim.tbl_deep_extend("force", options, opts or {})
+	options = vim.tbl_deep_extend("force", options, options or {})
 	local picker = UI.new_picker(options)
 
 	picker:render()

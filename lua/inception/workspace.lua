@@ -1,57 +1,73 @@
 local Utils = require("inception.utils")
 
----@class Inception.WorkspaceRootDir
----@field raw string user provided
----@field absolute string expanded to absolute
----@field safe string vim escaped
-
----@class Inception.WorkspaceOptions
----@field open_mode "tab" | "win"
----@field multi_root_mode "virtual" | "select" | "disabled"
-
 ---@class Inception.Workspace
 ---@field id number unique id
 ---@field name string unique name
----@field state Inception.WorkspaceState
----@field root_dirs Inception.WorkspaceRootDir[]
----@field attachment Inception.WorkspaceAttachment
----@field current_working_directory Inception.WorkspaceRootDir
+---@field state Inception.Workspace.State
+---@field root_dirs Inception.Workspace.RootDir[]
+---@field attachment Inception.Workspace.Attachment
+---@field current_working_directory Inception.Workspace.RootDir
 ---@field multi_root boolean
+---@field tabs number[]
+---@field windows number[]
 ---@field buffers number[]
----@field options Inception.WorkspaceOptions
+---@field options Inception.Workspace.Config.Options
 local Workspace = {}
 Workspace.__index = Workspace
-Workspace._new = {
-	root_dirs = {},
-	buffers = {},
-	---@type Inception.WorkspaceOptions
-	options = {
-		open_mode = "tab",
-		multi_root_mode = "disabled",
-	},
+
+---@enum Inception.Workspace.Attachment.Type
+Workspace.ATTACHMENT_TYPE = {
+	global = 1,
+	tab = 2,
+	window = 3,
 }
 
----@enum Inception.WorkspaceState
+---@enum Inception.Workspace.State
 Workspace.STATE = {
 	loaded = 1,
 	attached = 2,
 	active = 3,
 }
 
----@class Inception.WorkspaceConfig
+Workspace._new = {
+	root_dirs = {},
+	tabs = {},
+	windows = {},
+	buffers = {},
+	---@type Inception.Workspace.Config.Options
+	options = {
+		open_mode = Workspace.ATTACHMENT_TYPE.tab,
+		multi_root_mode = "disabled",
+	},
+}
+
+---@class Inception.Workspace.Config
 ---@field id number
 ---@field name string
 ---@field root_dirs string[]
----@field opts? Inception.WorkspaceOptions
+---@field options? Inception.Workspace.Config.Options
 
----@param config Inception.WorkspaceConfig
+---@class Inception.Workspace.Config.Options
+---@field open_mode Inception.Workspace.Attachment.Type
+---@field multi_root_mode "virtual" | "select" | "disabled"
+
+---@class Inception.Workspace.RootDir
+---@field raw string user provided
+---@field absolute string expanded to absolute
+---@field safe string vim escaped
+
+---@class Inception.Workspace.Attachment
+---@field type Inception.Workspace.Attachment.Type
+---@field id number
+
+---@param config Inception.Workspace.Config
 ---@return Inception.Workspace
 function Workspace.new(config)
 	local workspace = setmetatable(vim.deepcopy(Workspace._new), Workspace)
 
 	workspace.id = config.id
 	workspace.name = config.name
-	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.opts or {})
+	workspace.options = vim.tbl_deep_extend("force", workspace.options, config.options or {})
 
 	if workspace.options.multi_root_mode == "disabled" then
 		workspace:set_directory(config.root_dirs[1])
@@ -113,7 +129,7 @@ function Workspace:set_directory(dir)
 	self:select_directory(entry)
 end
 
----@param root_dir Inception.WorkspaceRootDir
+---@param root_dir Inception.Workspace.RootDir
 function Workspace:select_directory(root_dir)
 	self.current_working_directory = root_dir
 
@@ -123,9 +139,11 @@ function Workspace:select_directory(root_dir)
 end
 
 function Workspace:sync_cwd()
-	if self.attachment.type == "tab" then
+	if self.attachment.type == Workspace.ATTACHMENT_TYPE.global then
+		vim.api.nvim_set_current_dir(self.current_working_directory.safe)
+	elseif self.attachment.type == Workspace.ATTACHMENT_TYPE.tab then
 		vim.cmd("tcd " .. self.current_working_directory.safe)
-	elseif self.attachment.type == "win" then
+	elseif self.attachment.type == Workspace.ATTACHMENT_TYPE.window then
 		vim.cmd("lcd " .. self.current_working_directory.safe)
 	else
 		error("Internal error: Unknown attachment type: " .. self.attachment.type)
@@ -133,9 +151,11 @@ function Workspace:sync_cwd()
 end
 
 function Workspace:desync_cwd()
-	if self.attachment.type == "tab" then
+	if self.attachment.type == Workspace.ATTACHMENT_TYPE.global then
+	--- do nothing
+	elseif self.attachment.type == Workspace.ATTACHMENT_TYPE.tab then
 		vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
-	elseif self.attachment.type == "win" then
+	elseif self.attachment.type == Workspace.ATTACHMENT_TYPE.window then
 		vim.cmd("lcd " .. vim.fn.getcwd(-1, -1))
 	else
 		error("Internal error: Unknown attachment type: " .. self.attachment.type)

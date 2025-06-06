@@ -1,4 +1,5 @@
 ---@class Inception.Component
+---@field type "tab" | "win" | "buf"
 ---@field id number
 ---@field workspaces number[]
 ---@field visible boolean
@@ -41,11 +42,13 @@ function Component._set_invisible_action() end
 
 ---@param wsid number
 function Component:workspace_attach(wsid)
+	self:_attach_action()
 	table.insert(self.workspaces, wsid)
 end
 
 ---@param wsid number
 function Component:workspace_detach(wsid)
+	self:_detach_action()
 	for i, id in pairs(self.workspaces) do
 		if id == wsid then
 			table.remove(self.workspaces, i)
@@ -54,12 +57,21 @@ function Component:workspace_detach(wsid)
 	end
 end
 
+function Component:_attach_action() end
+function Component:_detach_action() end
+
 ---@class Inception.Component.Tab: Inception.Component
 local Tab = setmetatable({}, Component)
 Tab.__index = Tab
 
 function Tab._validate_new(tabid)
 	return vim.api.nvim_tabpage_is_valid(tabid)
+end
+
+function Tab:_attach_action()
+	if #self.workspaces ~= 0 then
+		error("Tab cannot be attached to multiple workspaces.")
+	end
 end
 
 ---@class Inception.Component.Window: Inception.Component
@@ -70,12 +82,19 @@ function Window._validate_new(winid)
 	return vim.api.nvim_win_is_valid(winid)
 end
 
+function Window:_attach_action()
+	if #self.workspaces ~= 0 then
+		error("Window cannot be attached to multiple workspaces.")
+	end
+end
+
 ---@class Inception.Component.Buffer: Inception.Component
 local Buffer = setmetatable({}, Component)
 Buffer.__index = Buffer
+Buffer.type = "buf"
 
 function Buffer._validate_new(bufnr)
-	return not vim.api.nvim_buf_is_valid(bufnr) or vim.api.nvim_get_option_value("buflisted", { buf = bufnr }) == false
+	return vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_get_option_value("buflisted", { buf = bufnr }) == true
 end
 
 function Buffer:_set_visible_action()
