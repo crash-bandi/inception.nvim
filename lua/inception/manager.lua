@@ -89,7 +89,7 @@ end
 ---@param tabid number
 ---@return number | nil
 function Manager:capture_tab(tabid)
-	if not self:get_tab_exists(tabid) then
+	if not self:tab_is_valid(tabid) then
 		local tab = Tab:new(tabid)
 		if not tab then
 			return
@@ -104,7 +104,7 @@ end
 ---@param winid number
 ---@return number | nil
 function Manager:capture_window(winid)
-	if not self:get_window_exists(winid) then
+	if not self:window_is_valid(winid) then
 		local window = Window:new(winid)
 		if not window then
 			return
@@ -119,7 +119,7 @@ end
 ---@param bufnr number
 ---@return number | nil
 function Manager:capture_buffer(bufnr)
-	if not self:get_buffer_exists(bufnr) then
+	if not self:buffer_is_valid(bufnr) then
 		local buffer = Buffer:new(bufnr)
 		if not buffer then
 			return
@@ -133,21 +133,21 @@ end
 
 ---@param tabid number
 function Manager:release_tab(tabid)
-	if self:get_tab_exists(tabid) then
+	if self:tab_is_valid(tabid) then
 		self.tabs[tabid] = nil
 	end
 end
 
 ---@param winid number
 function Manager:release_window(winid)
-	if self:get_window_exists(winid) then
+	if self:window_is_valid(winid) then
 		self.windows[winid] = nil
 	end
 end
 
 ---@param bufnr number
 function Manager:release_buffer(bufnr)
-	if self:get_buffer_exists(bufnr) then
+	if self:buffer_is_valid(bufnr) then
 		self.buffers[bufnr] = nil
 	end
 end
@@ -203,7 +203,7 @@ end
 ---@param wsid string
 ---@return boolean
 --- Return if workspace <wsid> exists
-function Manager:get_workspace_exists(wsid)
+function Manager:workspace_is_valid(wsid)
 	local ok, _ = pcall(self.get_workspace, self, wsid)
 	return ok
 end
@@ -211,7 +211,7 @@ end
 ---@param tabid number
 ---@return boolean
 --- Return if tab <tabid> exists
-function Manager:get_tab_exists(tabid)
+function Manager:tab_is_valid(tabid)
 	local ok, _ = pcall(self.get_tab, self, tabid)
 	return ok
 end
@@ -219,7 +219,7 @@ end
 ---@param winid number
 ---@return boolean
 --- Return if window <winid> exists
-function Manager:get_window_exists(winid)
+function Manager:window_is_valid(winid)
 	local ok, _ = pcall(self.get_window, self, winid)
 	return ok
 end
@@ -227,7 +227,7 @@ end
 ---@param bufnr number
 ---@return boolean
 --- Return if buffer <bufnr> exists
-function Manager:get_buffer_exists(bufnr)
+function Manager:buffer_is_valid(bufnr)
 	local ok, _ = pcall(self.get_buffer, self, bufnr)
 	return ok
 end
@@ -344,124 +344,68 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 		self:workspace_detach(workspace.id)
 	end
 
+	--- no explicit target_id used, just grab everything that isn't already attached to a workspace
+	if target_type == Workspace.ATTACHMENT_MODE.global then
+		for id, tab in pairs(self.tabs) do
+			if #tab.workspaces == 0 then
+				self:workspace_tab_attach(id, wsid)
+			end
+
+			for winid in vim.api.nvim_tabpage_list_wins(id) do
+				local window = self:window_is_valid(winid) and self:get_window(winid)
+				if window and #window.workspaces == 0 then
+					self:workspace_window_attach(winid, wsid)
+				end
+			end
+		end
+
+		for id, buffer in self.buffers do
+			if #buffer.workspaces == 0 then
+				if Config.options.buffer_capture_method == "listed" then
+					self:workspace_buffer_attach(id, wsid)
+				elseif Config.options.buffer_capture_method == "loaded" and vim.api.nvim_buf_is_loaded(id) then
+					self:workspace_buffer_attach(id, wsid)
+				elseif Config.options.buffer_capture_method == "opened" then
+					for winid in ipairs(workspace.windows) do
+						if vim.api.nvim_win_get_buf(winid) == id then
+							self:workspace_buffer_attach(id, wsid)
+						end
+					end
+				end
+			end
+		end
+	--- Use provided target_id, so will error if target is already attached to workspace
+	elseif target_type == Workspace.ATTACHMENT_MODE.tab then
+		local tab = self:get_tab(target_id)
+		self:workspace_tab_attach(tab.id, wsid)
+
+		for winid in vim.api.nvim_tabpage_list_wins(tab.id) do
+			local window = self:window_is_valid(winid) and self:get_window(winid)
+			if window and #window.workspaces == 0 then
+				self:workspace_window_attach(winid, wsid)
+
+				local bufid = vim.api.nvim_win_get_buf(winid)
+				local buffer = self:buffer_is_valid(bufid) and self:get_buffer(bufid)
+				if buffer then
+					self:workspace_buffer_attach(bufid, wsid)
+				end
+			end
+		end
+	elseif target_type == Workspace.ATTACHMENT_MODE.window then
+		local window = self:get_window(target_id)
+		self:workspace_window_attach(window.id, wsid)
+
+		local bufid = vim.api.nvim_win_get_buf(window.id)
+		local buffer = self:buffer_is_valid(bufid) and self:get_buffer(bufid)
+		if buffer then
+			self:workspace_buffer_attach(bufid, wsid)
+		end
+	else
+		--- Invalid target_type should be hangled by Manager or API before this function is called
+	end
+
 	table.insert(self.attached_workspaces, workspace.id)
 	workspace.state = Workspace.STATE.attached
-
-	local tabs_to_assign = {}
-	local windows_to_assign = {}
-	local buffers_to_assign = {}
-
-	for _, id in ipairs(vim.api.nvim_list_tabpages()) do
-		local capture = false
-
-		if self:get_tab_exists(id) then
-			local t = self:get_tab(id)
-
-			if #t.workspaces == 0 then
-				table.insert(tabs_to_assign, t.id)
-			end
-		else
-			capture = true
-		end
-
-		if capture then
-			local tabid = self:capture_tab(id)
-
-			if tabid then
-				if
-					workspace.attachment.type == Workspace.ATTACHMENT_TYPE.global
-					or (Workspace.ATTACHMENT_TYPE.tab and tabid == target_id)
-				then
-					table.insert(tabs_to_assign, tabid)
-				end
-			end
-		end
-	end
-
-	for _, tabid in ipairs(tabs_to_assign) do
-		self:workspace_tab_attach(tabid, workspace.id)
-	end
-
-	for _, id in ipairs(vim.api.nvim_list_wins()) do
-		local capture = false
-
-		if self:get_window_exists(id) then
-			local w = self:get_window(id)
-
-			if #w.workspaces == 0 then
-				table.insert(windows_to_assign, w.id)
-			end
-		else
-			capture = true
-		end
-
-		if capture then
-			local winid = self:capture_window(id)
-
-			if winid then
-				if
-					workspace.attachment.type == Workspace.ATTACHMENT_TYPE.global
-					or Workspace.ATTACHMENT_TYPE.tab
-					or (Workspace.ATTACHMENT_TYPE.window and winid == target_id)
-				then
-					table.insert(windows_to_assign, winid)
-				end
-			end
-		end
-	end
-
-	for _, winid in ipairs(windows_to_assign) do
-		self:workspace_window_attach(winid, workspace.id)
-	end
-
-	for _, buffer in ipairs(vim.fn.getbufinfo()) do
-		local capture = false
-
-		if self:get_buffer_exists(buffer.bufnr) then
-			local b = self:get_buffer(buffer.bufnr)
-
-			if #b.workspaces == 0 then
-				table.insert(buffers_to_assign, b.id)
-			end
-		else
-			if buffer.listed == 1 then
-				if Config.options.buffer_capture_method == "listed" then
-					capture = true
-				elseif Config.options.buffer_capture_method == "loaded" and buffer.loaded == 1 then
-					capture = true
-				elseif Config.options.buffer_capture_method == "opened" then
-					if target_type == Workspace.ATTACHMENT_TYPE.tab then
-						for _, win in ipairs(vim.api.nvim_tabpage_list_wins(target_id)) do
-							if vim.api.nvim_win_get_buf(win) == buffer.bufnr then
-								capture = true
-								break
-							end
-						end
-					elseif target_type == Workspace.ATTACHMENT_TYPE.window then
-						if vim.api.nvim_win_get_buf(target_id) == buffer.bufnr then
-							capture = true
-						end
-					else
-						error("Invalid attachment type: " .. target_type)
-					end
-				else
-					error("Invalid buffer capture method: " .. Config.options.buffer_capture_method)
-				end
-			end
-		end
-
-		if capture then
-			local bufid = self:capture_buffer(buffer.bufnr)
-
-			if bufid then
-				table.insert(buffers_to_assign, bufid)
-			end
-		end
-	end
-
-	for _, bufid in ipairs(buffers_to_assign) do
-		self:workspace_buffer_attach(bufid, workspace.id)
-	end
 end
 
 ---@param wsid number
@@ -485,7 +429,6 @@ function Manager:workspace_detach(wsid)
 		self:workspace_buffer_detach(bufnr, workspace.id)
 	end
 
-	workspace.attachment = nil
 	workspace.state = Workspace.STATE.loaded
 
 	--- remove workspace from attached workspaces list
@@ -559,8 +502,12 @@ function Manager:workspace_tab_attach(tabid, wsid)
 		return
 	end
 
+	local ok, ret = pcall(tab.workspace_attach, tab, wsid)
+	if not ok then
+		error(ret)
+	end
+
 	table.insert(workspace.tabs, tab.id)
-	tab:workspace_attach(wsid)
 end
 
 ---@param winid number
@@ -574,8 +521,12 @@ function Manager:workspace_window_attach(winid, wsid)
 		return
 	end
 
+	local ok, ret = pcall(window.workspace_attach, window, wsid)
+	if not ok then
+		error(ret)
+	end
+
 	table.insert(workspace.windows, window.id)
-	window:workspace_attach(wsid)
 end
 
 ---@param bufnr number
@@ -589,8 +540,12 @@ function Manager:workspace_buffer_attach(bufnr, wsid)
 		return
 	end
 
+	local ok, ret = pcall(buffer.workspace_attach, buffer, wsid)
+	if not ok then
+		error(ret)
+	end
+
 	table.insert(workspace.buffers, buffer.id)
-	buffer:workspace_attach(wsid)
 end
 
 ---@param tabid number
@@ -757,7 +712,7 @@ end
 
 ---@param args { buf: number }
 function Manager:handle_buffer_wipeout_event(args)
-	if self:get_buffer_exists(args.buf) then
+	if self:buffer_is_valid(args.buf) then
 		for _, wsid in ipairs(self.attached_workspaces) do
 			self:workspace_buffer_detach(args.buf, wsid)
 		end
