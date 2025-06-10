@@ -35,7 +35,7 @@ end
 
 ---@param name string
 ---@param dirs string | string[]
----@param opts? Inception.Workspace.Config.Options
+---@param opts? Inception.Workspace.Options
 ---@return Inception.Workspace
 --- Create new workspace, assign id, name, root dirs, options
 --- Set cwd
@@ -101,7 +101,7 @@ function Manager:capture_tab(tabid)
 	return tabid
 end
 
----@param windid number
+---@param winid number
 ---@return number | nil
 function Manager:capture_window(winid)
 	if not self:get_window_exists(winid) then
@@ -274,22 +274,22 @@ end
 --- focus on workspace <wsid>
 function Manager:workspace_open(wsid, mode)
 	local workspace = self:get_workspace(wsid)
-	local open_mode = mode and Workspace.ATTACHMENT_TYPE[mode] or workspace.options.open_mode
+	local attachment_mode = mode and Workspace.ATTACHMENT_MODE[mode] or workspace.options.attachment_mode
 
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
 			local target_id = nil
-			if open_mode == Workspace.ATTACHMENT_TYPE.tab then
+			if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
 				vim.cmd("tabnew")
 				target_id = vim.api.nvim_get_current_tabpage()
-			elseif open_mode == Workspace.ATTACHMENT_TYPE.window then
+			elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
 				vim.cmd("new")
 				target_id = vim.api.nvim_get_current_win()
 			else
-				error("Invalid workspace open mode: " .. mode, vim.log.levels.ERROR)
+				error("Invalid workspace attachment mode: " .. mode, vim.log.levels.ERROR)
 			end
 
-			self:workspace_attach(workspace.id, open_mode, target_id)
+			self:workspace_attach(workspace.id, attachment_mode, target_id)
 		end
 		self:focus_on_workspace(workspace.id)
 	end
@@ -333,24 +333,17 @@ function Manager:workspace_close(wsid)
 end
 
 ---@param wsid number
----@param target_type Inception.Workspace.Attachment.Type
+---@param target_type Inception.Workspace.AttachmentMode
 ---@param target_id number
 --- Set workspace <wsid> to attachment to given target
 --- assign current active buffer(s) to workspace
 function Manager:workspace_attach(wsid, target_type, target_id)
 	local workspace = self:get_workspace(wsid)
 
-	if workspace.attachment then
+	if workspace.state == Workspace.STATE.attached then
 		self:workspace_detach(workspace.id)
 	end
 
-	---@type Inception.Workspace.Attachment
-	local attachment = {
-		type = target_type,
-		id = target_id,
-	}
-
-	workspace.attachment = attachment
 	table.insert(self.attached_workspaces, workspace.id)
 	workspace.state = Workspace.STATE.attached
 
