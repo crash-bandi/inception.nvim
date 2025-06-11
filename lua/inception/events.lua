@@ -19,14 +19,14 @@ vim.api.nvim_create_autocmd("TabEnter", {
 vim.api.nvim_create_autocmd("TabLeave", {
 	group = "InceptionEvents",
 	callback = function()
-		Manager:handle_tabpage_leave_event()
+		Manager:handle_tabpage_leave_event({ tab = vim.api.nvim_get_current_tabpage() })
 	end,
 })
 
 vim.api.nvim_create_autocmd("TabClosed", {
 	group = "InceptionEvents",
-	callback = function()
-		Manager:handle_tabpage_closed_event({ tab = vim.api.nvim_get_current_tabpage() })
+	callback = function(args)
+		Manager:handle_tabpage_closed_event({ tab = tonumber(args.file) })
 	end,
 })
 
@@ -54,11 +54,11 @@ vim.api.nvim_create_autocmd("WinLeave", {
 vim.api.nvim_create_autocmd("WinClosed", {
 	group = "InceptionEvents",
 	callback = function(args)
-    local winid = tonumber(args.match)
-    if not winid then
-      ---TODO do something more with this
-      error("No window id to WinClose found")
-    end
+		local winid = tonumber(args.match)
+		if not winid then
+			---TODO do something more with this
+			error("No window id to WinClose found")
+		end
 		Manager:handle_win_closed_event({ win = winid })
 	end,
 })

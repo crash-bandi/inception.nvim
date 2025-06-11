@@ -30,8 +30,14 @@ function Component:new(id)
 	return component
 end
 
+---@return boolean
 function Component._validate_new(id)
 	error("method not implmented")
+end
+
+---@return boolean
+function Component:is_valid()
+	error("method not implemented")
 end
 
 function Component:set_visible()
@@ -44,8 +50,8 @@ function Component:set_invisible()
 	self.visible = false
 end
 
-function Component._set_visible_action() end
-function Component._set_invisible_action() end
+function Component:_set_visible_action() end
+function Component:_set_invisible_action() end
 
 ---@param wsid number
 function Component:workspace_attach(wsid)
@@ -82,6 +88,10 @@ function Tab:_attach_action()
 	end
 end
 
+function Tab:is_valid()
+	return vim.api.nvim_tabpage_is_valid(self.id)
+end
+
 ---@class Inception.Component.Window: Inception.Component
 local Window = setmetatable({}, Component)
 Window.__index = Window
@@ -95,6 +105,10 @@ function Window:_attach_action()
 	if #self.workspaces ~= 0 then
 		error("Window cannot be attached to multiple workspaces.")
 	end
+end
+
+function Window:is_valid()
+	return vim.api.nvim_win_is_valid(self.id)
 end
 
 ---@class Inception.Component.Buffer: Inception.Component
@@ -112,6 +126,10 @@ end
 
 function Buffer:_set_invisible_action()
 	vim.api.nvim_set_option_value("buflisted", false, { buf = self.id })
+end
+
+function Buffer:is_valid()
+	return vim.api.nvim_buf_is_valid(self.id)
 end
 
 return {

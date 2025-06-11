@@ -1,3 +1,4 @@
+local ComponentTypes = require("inception.component").Types
 local Utils = require("inception.utils")
 
 ---@class Inception.Workspace
@@ -92,6 +93,20 @@ function Workspace:attachment_mode()
 		return Workspace.ATTACHMENT_MODE.tab
 	elseif #self.windows > 0 then
 		return Workspace.ATTACHMENT_MODE.window
+	end
+end
+
+---@param type Inception.Component.Type
+---@return number[]
+function Workspace:get_components(type)
+	if type == ComponentTypes.tab then
+		return self.tabs
+	elseif type == ComponentTypes.window then
+		return self.windows
+	elseif type == ComponentTypes.buffer then
+		return self.buffers
+	else
+		error("Internal error - Invalid component type: " .. type)
 	end
 end
 
