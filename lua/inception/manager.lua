@@ -1,4 +1,5 @@
 local Workspace = require("inception.workspace")
+local ComponentTypes = require("inception.component").Types
 local Tab = require("inception.component").Tab
 local Window = require("inception.component").Window
 local Buffer = require("inception.component").Buffer
@@ -86,71 +87,116 @@ function Manager:workspace_unload(wsid)
 	self.name_map[workspace.name] = nil
 end
 
----@param tabid number
+---@param id number
+---@param type Inception.Component.Type
 ---@return number | nil
-function Manager:capture_tab(tabid)
-	if not self:tab_is_valid(tabid) then
-		local tab = Tab:new(tabid)
-		if not tab then
+function Manager:capture_component(id, type)
+	if not self:component_is_valid(id, type) then
+		local class = nil
+		local tbl = nil
+		if type == ComponentTypes.tab then
+			class = Tab
+			tbl = self.tabs
+		elseif type == ComponentTypes.window then
+			class = Window
+			tbl = self.windows
+		elseif type == ComponentTypes.buffer then
+			class = Buffer
+			tbl = self.buffers
+		else
+			error("Internal error - Invalid component type: " .. type)
+		end
+
+		local component = class:new(id)
+		if not component then
 			return
 		end
-		self.tabs[tab.id] = tab
-		return tab.id
+		tbl[component.id] = component
+		return component.id
 	end
 
-	return tabid
+	return id
 end
 
----@param winid number
----@return number | nil
-function Manager:capture_window(winid)
-	if not self:window_is_valid(winid) then
-		local window = Window:new(winid)
-		if not window then
-			return
+-- ---@param tabid number
+-- ---@return number | nil
+-- function Manager:capture_tab(tabid)
+-- 	if not self:tab_is_valid(tabid) then
+-- 		local tab = Tab:new(tabid)
+-- 		if not tab then
+-- 			return
+-- 		end
+-- 		self.tabs[tab.id] = tab
+-- 		return tab.id
+-- 	end
+--
+-- 	return tabid
+-- end
+--
+-- ---@param winid number
+-- ---@return number | nil
+-- function Manager:capture_window(winid)
+-- 	if not self:window_is_valid(winid) then
+-- 		local window = Window:new(winid)
+-- 		if not window then
+-- 			return
+-- 		end
+-- 		self.windows[window.id] = window
+-- 		return window.id
+-- 	end
+--
+-- 	return winid
+-- end
+--
+-- ---@param bufnr number
+-- ---@return number | nil
+-- function Manager:capture_buffer(bufnr)
+-- 	if not self:buffer_is_valid(bufnr) then
+-- 		local buffer = Buffer:new(bufnr)
+-- 		if not buffer then
+-- 			return
+-- 		end
+-- 		self.buffers[buffer.id] = buffer
+-- 		return buffer.id
+-- 	end
+--
+-- 	return bufnr
+-- end
+
+---@param id number
+---@param type Inception.Component.Type
+function Manager:release_component(id, type)
+	if self:component_is_valid(id, type) then
+		if type == ComponentTypes.tab then
+			self.tabs[id] = nil
+		elseif type == ComponentTypes.window then
+			self.windows[id] = nil
+		elseif type == ComponentTypes.buffer then
+			self.buffers[id] = nil
 		end
-		self.windows[window.id] = window
-		return window.id
-	end
-
-	return winid
-end
-
----@param bufnr number
----@return number | nil
-function Manager:capture_buffer(bufnr)
-	if not self:buffer_is_valid(bufnr) then
-		local buffer = Buffer:new(bufnr)
-		if not buffer then
-			return
-		end
-		self.buffers[buffer.id] = buffer
-		return buffer.id
-	end
-
-	return bufnr
-end
-
----@param tabid number
-function Manager:release_tab(tabid)
-	if self:tab_is_valid(tabid) then
-		self.tabs[tabid] = nil
 	end
 end
 
----@param winid number
-function Manager:release_window(winid)
-	if self:window_is_valid(winid) then
-		self.windows[winid] = nil
-	end
-end
-
----@param bufnr number
-function Manager:release_buffer(bufnr)
-	if self:buffer_is_valid(bufnr) then
-		self.buffers[bufnr] = nil
-	end
-end
+-- ---@param tabid number
+-- function Manager:release_tab(tabid)
+-- 	if self:tab_is_valid(tabid) then
+-- 		self.tabs[tabid] = nil
+-- 	end
+-- end
+--
+-- ---@param winid number
+-- function Manager:release_window(winid)
+-- 	if self:window_is_valid(winid) then
+-- 		self.windows[winid] = nil
+-- 	end
+-- end
+--
+-- ---@param bufnr number
+-- function Manager:release_buffer(bufnr)
+-- 	if self:buffer_is_valid(bufnr) then
+-- 		self.buffers[bufnr] = nil
+-- 	end
+-- end
 
 ---@param wsid number
 ---@return Inception.Workspace
@@ -164,41 +210,62 @@ function Manager:get_workspace(wsid)
 	error("Invalid workspace id: " .. wsid)
 end
 
----@param tabid number
----@return Inception.Component.Tab
-function Manager:get_tab(tabid)
-	local tab = self.tabs[tabid]
+---@param id number
+---@param type Inception.Component.Type
+---@return Inception.Component
+function Manager:get_component(id, type)
+	local component = nil
 
-	if tab then
-		return tab
+	if type == ComponentTypes.tab then
+		component = self.tabs[id]
+	elseif type == ComponentTypes.window then
+		component = self.windows[id]
+	elseif type == ComponentTypes.buffer then
+		component = self.buffers[id]
 	end
 
-	error("Invalid tab id: " .. tabid)
-end
-
----@param winid number
----@return Inception.Component.Window
-function Manager:get_window(winid)
-	local window = self.windows[winid]
-
-	if window then
-		return window
+	if component then
+		return component
 	end
 
-	error("Invalid window id: " .. winid)
+	error("Invalid " .. type .. " id: " .. id)
 end
 
----@param bufnr number
----@return Inception.Component.Buffer
-function Manager:get_buffer(bufnr)
-	local buffer = self.buffers[bufnr]
-
-	if buffer then
-		return buffer
-	end
-
-	error("Invalid buffer id: " .. bufnr)
-end
+-- ---@param tabid number
+-- ---@return Inception.Component.Tab
+-- function Manager:get_tab(tabid)
+-- 	local tab = self.tabs[tabid]
+--
+-- 	if tab then
+-- 		return tab
+-- 	end
+--
+-- 	error("Invalid tab id: " .. tabid)
+-- end
+--
+-- ---@param winid number
+-- ---@return Inception.Component.Window
+-- function Manager:get_window(winid)
+-- 	local window = self.windows[winid]
+--
+-- 	if window then
+-- 		return window
+-- 	end
+--
+-- 	error("Invalid window id: " .. winid)
+-- end
+--
+-- ---@param bufnr number
+-- ---@return Inception.Component.Buffer
+-- function Manager:get_buffer(bufnr)
+-- 	local buffer = self.buffers[bufnr]
+--
+-- 	if buffer then
+-- 		return buffer
+-- 	end
+--
+-- 	error("Invalid buffer id: " .. bufnr)
+-- end
 
 ---@param wsid string
 ---@return boolean
@@ -208,29 +275,38 @@ function Manager:workspace_is_valid(wsid)
 	return ok
 end
 
----@param tabid number
+---@param id number
+---@param type Inception.Component.Type
 ---@return boolean
---- Return if tab <tabid> exists
-function Manager:tab_is_valid(tabid)
-	local ok, _ = pcall(self.get_tab, self, tabid)
+--- Return if component <type> <id> exists
+function Manager:component_is_valid(id, type)
+	local ok, _ = pcall(self.get_component, self, id, type)
 	return ok
 end
 
----@param winid number
----@return boolean
---- Return if window <winid> exists
-function Manager:window_is_valid(winid)
-	local ok, _ = pcall(self.get_window, self, winid)
-	return ok
-end
-
----@param bufnr number
----@return boolean
---- Return if buffer <bufnr> exists
-function Manager:buffer_is_valid(bufnr)
-	local ok, _ = pcall(self.get_buffer, self, bufnr)
-	return ok
-end
+-- ---@param tabid number
+-- ---@return boolean
+-- --- Return if tab <tabid> exists
+-- function Manager:tab_is_valid(tabid)
+-- 	local ok, _ = pcall(self.get_tab, self, tabid)
+-- 	return ok
+-- end
+--
+-- ---@param winid number
+-- ---@return boolean
+-- --- Return if window <winid> exists
+-- function Manager:window_is_valid(winid)
+-- 	local ok, _ = pcall(self.get_window, self, winid)
+-- 	return ok
+-- end
+--
+-- ---@param bufnr number
+-- ---@return boolean
+-- --- Return if buffer <bufnr> exists
+-- function Manager:buffer_is_valid(bufnr)
+-- 	local ok, _ = pcall(self.get_buffer, self, bufnr)
+-- 	return ok
+-- end
 
 ---@param name string
 ---@return Inception.Workspace
@@ -352,7 +428,8 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 			end
 
 			for winid in vim.api.nvim_tabpage_list_wins(id) do
-				local window = self:window_is_valid(winid) and self:get_window(winid)
+				local window = self:component_is_valid(winid, ComponentTypes.window)
+					and self:get_component(winid, ComponentTypes.window)
 				if window and #window.workspaces == 0 then
 					self:workspace_window_attach(winid, wsid)
 				end
@@ -376,27 +453,30 @@ function Manager:workspace_attach(wsid, target_type, target_id)
 		end
 	--- Use provided target_id, so will error if target is already attached to workspace
 	elseif target_type == Workspace.ATTACHMENT_MODE.tab then
-		local tab = self:get_tab(target_id)
+		local tab = self:get_component(target_id, ComponentTypes.tab)
 		self:workspace_tab_attach(tab.id, wsid)
 
 		for winid in vim.api.nvim_tabpage_list_wins(tab.id) do
-			local window = self:window_is_valid(winid) and self:get_window(winid)
+			local window = self:component_is_valid(winid, ComponentTypes.window)
+				and self:get_component(winid, ComponentTypes.window)
 			if window and #window.workspaces == 0 then
 				self:workspace_window_attach(winid, wsid)
 
 				local bufid = vim.api.nvim_win_get_buf(winid)
-				local buffer = self:buffer_is_valid(bufid) and self:get_buffer(bufid)
+				local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
+					and self:get_component(bufid, ComponentTypes.buffer)
 				if buffer then
 					self:workspace_buffer_attach(bufid, wsid)
 				end
 			end
 		end
 	elseif target_type == Workspace.ATTACHMENT_MODE.window then
-		local window = self:get_window(target_id)
+		local window = self:get_component(target_id, ComponentTypes.window)
 		self:workspace_window_attach(window.id, wsid)
 
 		local bufid = vim.api.nvim_win_get_buf(window.id)
-		local buffer = self:buffer_is_valid(bufid) and self:get_buffer(bufid)
+		local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
+			and self:get_component(bufid, ComponentTypes.buffer)
 		if buffer then
 			self:workspace_buffer_attach(bufid, wsid)
 		end
@@ -476,20 +556,39 @@ end
 function Manager:focus_on_workspace(wsid)
 	local workspace = self:get_workspace(wsid)
 
-	if workspace.attachment then
-		if workspace.attachment.type == Workspace.ATTACHMENT_TYPE.tab then
-			vim.api.nvim_set_current_tabpage(workspace.attachment.id)
-		elseif workspace.attachment.type == Workspace.ATTACHMENT_TYPE.window then
-			vim.api.nvim_set_current_win(workspace.attachment.id)
-		else
-			error("Internal error: close workspace with unknown attachment type.")
+	--- save cursor location on workspace exit to jump back on reenter
+	if workspace.state == Workspace.STATE.attached then
+		local attachment_mode = workspace:attachment_mode()
+		if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
+			vim.api.nvim_set_current_tabpage(workspace.tabs[1])
+		elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
+			vim.api.nvim_set_current_win(workspace.windows[1])
 		end
 
-		if workspace.state ~= Workspace.STATE.active then
-			self:workspace_enter(workspace.id)
-		end
+		self:workspace_enter(workspace.id)
 	end
 end
+
+-- ---@param id number
+-- ---@param wsid number
+-- --- Attach component <id> to workspace <wsid>
+-- function Manager:workspace_attach_component(id, wsid)
+-- 	local workspace = self:get_workspace(wsid)
+-- 	local component = nil
+--
+-- 	-- if component.type == "tab"
+--
+-- 	if vim.tbl_contains(workspace.tabs, tabid) then
+-- 		return
+-- 	end
+--
+-- 	local ok, ret = pcall(tab.workspace_attach, tab, wsid)
+-- 	if not ok then
+-- 		error(ret)
+-- 	end
+--
+-- 	table.insert(workspace.tabs, tab.id)
+-- end
 
 ---@param tabid number
 ---@param wsid number
@@ -527,6 +626,7 @@ function Manager:workspace_window_attach(winid, wsid)
 	end
 
 	table.insert(workspace.windows, window.id)
+	self.set_component_visibility(workspace, window)
 end
 
 ---@param bufnr number
@@ -546,6 +646,7 @@ function Manager:workspace_buffer_attach(bufnr, wsid)
 	end
 
 	table.insert(workspace.buffers, buffer.id)
+	self.set_component_visibility(workspace, buffer)
 end
 
 ---@param tabid number
@@ -563,6 +664,7 @@ function Manager:workspace_tab_detach(tabid, wsid)
 	end
 
 	tab:workspace_detach(workspace.id)
+	self.set_component_visibility(workspace, tab)
 end
 
 ---@param winid number
@@ -580,6 +682,7 @@ function Manager:workspace_window_detach(winid, wsid)
 	end
 
 	window:workspace_detach(workspace.id)
+	self.set_component_visibility(workspace, Buffer)
 end
 
 ---@param bufnr number
@@ -597,6 +700,7 @@ function Manager:workspace_buffer_detach(bufnr, wsid)
 	end
 
 	buffer:workspace_detach(workspace.id)
+	self.set_component_visibility(workspace, buffer)
 end
 
 ---@param args {tab: number}
