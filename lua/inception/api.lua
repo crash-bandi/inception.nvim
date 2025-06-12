@@ -73,7 +73,7 @@ function api.close_workspace(wsid)
 end
 
 ---@param wsid number workspace number
----@param target_type? Inception.Workspace.Attachment.Type
+---@param target_type? Inception.Workspace.AttachmentMode
 ------@param target_id? number
 function api.attach_workspace(wsid, target_type, target_id)
 	local ok, ret = pcall(Manager.get_workspace, Manager, wsid)
@@ -85,7 +85,7 @@ function api.attach_workspace(wsid, target_type, target_id)
 
 	local workspace = ret
 
-	target_type = target_type or workspace.options.open_mode
+	target_type = target_type or workspace.options.attachment_mode
 	if target_type == "tab" then
 		target_id = target_id or vim.api.nvim_get_current_tabpage()
 		if not vim.api.nvim_tabpage_is_valid(target_id) then

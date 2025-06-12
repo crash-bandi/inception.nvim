@@ -69,71 +69,69 @@ end
 
 ---@param workspace Inception.Workspace
 function Portal:window_create(workspace)
-  if not workspace.attachment then
-    error("Cannot create a portal window for a detached workspace")
-  end
+	if not workspace.state == Workspace.STATE.attached then
+		error("Cannot create a portal window for a detached workspace")
+	end
 
 	local window = setmetatable(vim.deepcopy(PortalWindow._new), PortalWindow)
 
-  local tabpage = nil
-  if workspace.attachment.type == Workspace.ATTACHMENT_TYPE.tab then
-    tabpage = workspace.attachment.id
-  elseif workspace.attachment.type == Workspace.ATTACHMENT_TYPE.window then
-    tabpage = vim.api.nvim_win_get_tabpage(workspace.attachment.id)
-  else
-    error("Invalid workspace attachment type: " .. workspace.attachment.type)
-  end
+	local tabpage = nil
+	if workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
+		tabpage = vim.api.nvim_get_current_tabpage()
+	elseif workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.window then
+		tabpage = vim.api.nvim_win_current_tabpage()
+	end
 
-  if tabpage ~= vim.api.nvim_get_current_tabpage() then
-    ---TODO: figure out if a sneaky enter/create/exit can be performed here, or only call on the first workspace enter event
-    error("Cannot create a portal window on an inactive workspace")
-  end
+	if tabpage ~= vim.api.nvim_get_current_tabpage() then
+		---TODO: figure out if a sneaky enter/create/exit can be performed here, or only call on the first workspace enter event
+		error("Cannot create a portal window on an inactive workspace")
+	end
 
 	window.id = vim.api.nvim_open_win(Portal.buffer, true, window.options)
 	window.workspace = workspace.id
 
 	self.windows[window.id] = window
-  self.workspace_windows[window.workspace] = window.id
+	self.workspace_windows[window.workspace] = window.id
 	return window.id
 end
 
 ---@param winid number
 function Portal:window_close(winid)
-  local window = self:get_window(winid)
-  self.workspace_windows[window.workspace] = nil
-  self.windows[window.id] = nil
+	local window = self:get_window(winid)
+	self.workspace_windows[window.workspace] = nil
+	self.windows[window.id] = nil
 end
 
 ---@param winid number
 ---@return Inception.Portal.Window
 function Portal:get_window(winid)
-  local window = self.windows[winid]
+	local window = self.windows[winid]
 
-  if not window then
-    error("Invalid window id: " .. winid)
-  end
+	if not window then
+		error("Invalid window id: " .. winid)
+	end
 
-  return window
+	return window
 end
 
 ---@param wsid number
 ---@return number
 function Portal:get_workspace_window(wsid)
-  local winid = self.workspace_windows[wsid]
+	local winid = self.workspace_windows[wsid]
 
-  if not winid then
-    error("No window found for workspace " .. wsid)
-  end
+	if not winid then
+		error("No window found for workspace " .. wsid)
+	end
 
-  return winid
+	return winid
 end
 
 ---@param wsid number
 ---@return boolean
 function Portal:get_workspace_has_window(wsid)
-  local ok, _ = pcall(self.get_workspace_has_window, self, wsid)
+	local ok, _ = pcall(self.get_workspace_has_window, self, wsid)
 
-  return ok
+	return ok
 end
 
 function PortalWindow:update()
@@ -149,11 +147,11 @@ function PortalWindow:update()
 end
 
 function PortalWindow:_open()
-  vim.api.nvim_win_set_config(self.id, {hide = false})
+	vim.api.nvim_win_set_config(self.id, { hide = false })
 end
 
 function PortalWindow:_close()
-  vim.api.nvim_win_set_config(self.id, {hide = true})
+	vim.api.nvim_win_set_config(self.id, { hide = true })
 end
 
 return Portal
