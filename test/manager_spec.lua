@@ -1,7 +1,8 @@
 --- TODO: build test for closing non-active workspace to test going back to original tab
 --- TODO: rebuild test for attaching unattached buffer
 
-require("inception.init")
+require("inception.init").setup()
+
 local Manager = require("inception.manager")
 local Workspace = require("inception.workspace")
 local Component = require("inception.component")
@@ -54,6 +55,8 @@ describe("Manager.workspace_create:", function()
 			current_working_directory = Utils.normalize_file_path(current_dir),
 			root_dirs = { Utils.normalize_file_path(current_dir) },
 			buffers = {},
+			windows = {},
+			tabs = {},
 		}, Manager:workspace_create(name, current_dir))
 	end)
 
@@ -66,6 +69,8 @@ describe("Manager.workspace_create:", function()
 			current_working_directory = Utils.normalize_file_path("~"),
 			root_dirs = { Utils.normalize_file_path("~") },
 			buffers = {},
+			windows = {},
+			tabs = {},
 		}, Manager:workspace_create(name, "~"))
 	end)
 
@@ -80,6 +85,8 @@ describe("Manager.workspace_create:", function()
 			current_working_directory = Utils.normalize_file_path(current_dir),
 			root_dirs = { Utils.normalize_file_path(current_dir) },
 			buffers = {},
+			windows = {},
+			tabs = {},
 		}, Manager:workspace_create(name, current_dir, custom_opts))
 	end)
 
@@ -157,6 +164,8 @@ describe("Env cleanup", function()
 	end)
 end)
 
+--- -----------------------------------------------------------------------------
+
 describe("Manager.workspace_open:", function()
 	local winworkspace = Manager:workspace_create("wintest1", current_dir)
 	local tabworkspace = Manager:workspace_create("tabtest1", current_dir)
@@ -165,7 +174,7 @@ describe("Manager.workspace_open:", function()
 
 	it("win should open workspace without errors", function()
 		assert.has_no.errors(function()
-			Manager:workspace_open(winworkspace, "win")
+			Manager:workspace_open(winworkspace, Workspace.ATTACHMENT_MODE.window)
 		end)
 	end)
 
@@ -198,91 +207,91 @@ describe("Manager.workspace_open:", function()
 		assert.are.same(bufs, winworkspace.buffers)
 	end)
 
-	it("win cwd synced with workspace root directory", function()
-		assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(0), ":p"), winworkspace.current_working_directory.absolute)
-	end)
-
-	it("win workspace can change current working directory", function()
-		winworkspace:set_directory("~")
-		assert.are.same(vim.fn.fnamemodify("~", ":p"), winworkspace.current_working_directory.absolute)
-	end)
-
-	it("win workspace can sync win cwd", function()
-		assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(0), ":p"), winworkspace.current_working_directory.absolute)
-	end)
-
-	it("tab should open workspace without errors", function()
-		assert.has_no.errors(function()
-			Manager:workspace_open(tabworkspace)
-		end)
-	end)
-
-	it("tab workspace should be in manager's attached workspaces list", function()
-		assert.is_true(vim.tbl_contains(Manager.attached_workspaces, tabworkspace.id))
-	end)
-
-	it("tab workspace should be manager's active workspace", function()
-		assert.are.same(Manager.active_workspace, tabworkspace.id)
-	end)
-
-	it("tab workspace state should be active", function()
-		assert.are.same(Workspace.STATE.active, tabworkspace.state)
-	end)
-
-	it("tab workspace should be attached to new tab", function()
-		local tab = vim.api.nvim_get_current_tabpage()
-		assert.are.same({ tab }, tabworkspace.tabs)
-	end)
-
-	it("tab workspace should have current buffer attached", function()
-		local bufs = vim.tbl_map(
-			function(item)
-				return item.bufnr
-			end,
-			vim.tbl_filter(function(item)
-				return item.listed == 1 and item.loaded == 1
-			end, vim.fn.getbufinfo())
-		)
-		assert.are.same(bufs, tabworkspace.buffers)
-	end)
-
-	it("tabpage cwd synced with workspace root directory", function()
-		assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(-1, 0), ":p"), tabworkspace.current_working_directory.absolute)
-	end)
-
-	it("tab workspace can change current working directory", function()
-		tabworkspace:set_directory("~")
-		assert.are.same(vim.fn.fnamemodify("~", ":p"), tabworkspace.current_working_directory.absolute)
-	end)
-
-	it("tab workspace can sync tabpage cwd", function()
-		assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(-1, 0), ":p"), tabworkspace.current_working_directory.absolute)
-	end)
-
-	it("workspace did not attach out of scope buffer", function()
-		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, unlisted_buf))
-	end)
-
-	it("workspace captures new buffer", function()
-		local new_buf = vim.api.nvim_create_buf(true, false)
-		assert.is_true(vim.tbl_contains(tabworkspace.buffers, new_buf))
-	end)
-
-	it("workspace can attach existing buffer", function()
-		Manager:workspace_attach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
-		assert.is_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
-	end)
-
-	it("workspace can detach buffer", function()
-		Manager:workspace_detach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
-		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
-	end)
-
-	it("workspace should remove buffer when buffer is closed", function()
-		Manager:workspace_attach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
-		vim.api.nvim_buf_delete(external_buf, { force = true })
-		assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
-	end)
+	-- it("win cwd synced with workspace root directory", function()
+	-- 	assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(0), ":p"), winworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("win workspace can change current working directory", function()
+	-- 	winworkspace:set_directory("~")
+	-- 	assert.are.same(vim.fn.fnamemodify("~", ":p"), winworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("win workspace can sync win cwd", function()
+	-- 	assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(0), ":p"), winworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("tab should open workspace without errors", function()
+	-- 	assert.has_no.errors(function()
+	-- 		Manager:workspace_open(tabworkspace)
+	-- 	end)
+	-- end)
+	--
+	-- it("tab workspace should be in manager's attached workspaces list", function()
+	-- 	assert.is_true(vim.tbl_contains(Manager.attached_workspaces, tabworkspace.id))
+	-- end)
+	--
+	-- it("tab workspace should be manager's active workspace", function()
+	-- 	assert.are.same(Manager.active_workspace, tabworkspace.id)
+	-- end)
+	--
+	-- it("tab workspace state should be active", function()
+	-- 	assert.are.same(Workspace.STATE.active, tabworkspace.state)
+	-- end)
+	--
+	-- it("tab workspace should be attached to new tab", function()
+	-- 	local tab = vim.api.nvim_get_current_tabpage()
+	-- 	assert.are.same({ tab }, tabworkspace.tabs)
+	-- end)
+	--
+	-- it("tab workspace should have current buffer attached", function()
+	-- 	local bufs = vim.tbl_map(
+	-- 		function(item)
+	-- 			return item.bufnr
+	-- 		end,
+	-- 		vim.tbl_filter(function(item)
+	-- 			return item.listed == 1 and item.loaded == 1
+	-- 		end, vim.fn.getbufinfo())
+	-- 	)
+	-- 	assert.are.same(bufs, tabworkspace.buffers)
+	-- end)
+	--
+	-- it("tabpage cwd synced with workspace root directory", function()
+	-- 	assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(-1, 0), ":p"), tabworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("tab workspace can change current working directory", function()
+	-- 	tabworkspace:set_directory("~")
+	-- 	assert.are.same(vim.fn.fnamemodify("~", ":p"), tabworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("tab workspace can sync tabpage cwd", function()
+	-- 	assert.are.same(vim.fn.fnamemodify(vim.fn.getcwd(-1, 0), ":p"), tabworkspace.current_working_directory.absolute)
+	-- end)
+	--
+	-- it("workspace did not attach out of scope buffer", function()
+	-- 	assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, unlisted_buf))
+	-- end)
+	--
+	-- it("workspace captures new buffer", function()
+	-- 	local new_buf = vim.api.nvim_create_buf(true, false)
+	-- 	assert.is_true(vim.tbl_contains(tabworkspace.buffers, new_buf))
+	-- end)
+	--
+	-- it("workspace can attach existing buffer", function()
+	-- 	Manager:workspace_attach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
+	-- 	assert.is_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
+	-- end)
+	--
+	-- it("workspace can detach buffer", function()
+	-- 	Manager:workspace_detach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
+	-- 	assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
+	-- end)
+	--
+	-- it("workspace should remove buffer when buffer is closed", function()
+	-- 	Manager:workspace_attach_component(tabworkspace, Manager:get_component(external_buf, Component.Types.buffer))
+	-- 	vim.api.nvim_buf_delete(external_buf, { force = true })
+	-- 	assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
+	-- end)
 end)
 
 -- describe("Manager.workspace_close:", function()

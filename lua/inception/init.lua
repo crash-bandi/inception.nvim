@@ -2,7 +2,7 @@ local Config = require("inception.Config")
 
 local M = {}
 
----@param config Inception.User.Config
+---@param config? Inception.User.Config
 function M.setup(config)
 	Config.load(config)
 

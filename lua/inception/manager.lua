@@ -36,12 +36,12 @@ end
 
 ---@param name string
 ---@param dirs string | string[]
----@param opts? Inception.Workspace.Options
+---@param options? Inception.Workspace.Options
 ---@return Inception.Workspace
 --- Create new workspace, assign id, name, root dirs, options
 --- Set cwd
 --- open workspace
-function Manager:workspace_create(name, dirs, opts)
+function Manager:workspace_create(name, dirs, options)
 	if self:get_workspace_name_exists(name) then
 		error("Workspace '" .. name .. "' already exists", vim.log.levels.ERROR)
 	end
@@ -63,7 +63,7 @@ function Manager:workspace_create(name, dirs, opts)
 		id = id,
 		name = name,
 		root_dirs = dirs,
-		opts = opts,
+		options = options,
 	}
 
 	local workspace = Workspace.new(workspace_config)
@@ -348,16 +348,16 @@ function Manager:workspace_rename(new_name, workspace)
 end
 
 ---@param workspace Inception.Workspace
----@param mode? string
+---@param mode? Inception.Workspace.AttachmentMode
 --- Create new <mode> and attach workspace <wsid>
 --- focus on workspace <wsid>
 function Manager:workspace_open(workspace, mode)
-	local attachment_mode = mode and Workspace.ATTACHMENT_MODE[mode] or workspace.options.attachment_mode
+	local attachment_mode = mode or workspace.options.attachment_mode
 
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
 			local target_id = nil
-			if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
+			if attachment_mode == (Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab) then
 				vim.cmd("tabnew")
 				target_id = vim.api.nvim_get_current_tabpage()
 			elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
@@ -366,45 +366,51 @@ function Manager:workspace_open(workspace, mode)
 			else
 				error("Invalid workspace attachment mode: " .. mode, vim.log.levels.ERROR)
 			end
-
-			self:workspace_attach(workspace.id, attachment_mode, target_id)
+			self:workspace_attach(workspace, attachment_mode, target_id)
 		end
-		self:focus_on_workspace(workspace.id)
+		self:focus_on_workspace(workspace)
 	end
 end
 
 ---@param workspace Inception.Workspace
---- close attachment tab/win
+--- close attached tab/win
+--- Detach attached buffers
 --- Detach workspace <wsid>
 function Manager:workspace_close(workspace)
-	local attachment = workspace.attachment
+	local attachment_mode = workspace:attachment_mode()
 
 	if workspace.state == Workspace.STATE.active then
-		self:workspace_exit(wsid)
+		self:workspace_exit(workspace)
 	end
 
 	if workspace.state == Workspace.STATE.attached then
-		self:workspace_detach(wsid)
+		self:workspace_detach(workspace)
 
-		if attachment.type == Workspace.ATTACHMENT_TYPE.tab then
+		if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
 			if #vim.api.nvim_list_tabpages() > 1 then
 				local current_tabpage = vim.api.nvim_get_current_tabpage()
-				if current_tabpage ~= attachment.id then
-					vim.api.nvim_set_current_tabpage(attachment.id)
-					vim.cmd("tabclose")
-					vim.api.nvim_set_current_tabpage(current_tabpage)
-				else
-					vim.cmd("tabclose")
+				for _, tabid in ipairs(workspace.tabs) do
+					if current_tabpage ~= tabid then
+						vim.api.nvim_set_current_tabpage(tabid)
+						vim.cmd("tabclose")
+						vim.api.nvim_set_current_tabpage(current_tabpage)
+					else
+						vim.cmd("tabclose")
+					end
 				end
 			else
 				if Config.options.exit_on_last_tab_close then
 					vim.cmd("tabclose")
 				end
 			end
-		elseif attachment.type == Workspace.ATTACHMENT_TYPE.window then
-			vim.api.nvim_win_close(attachment.id, false)
-		else
-			error("Internal error: unknown attachment type: " .. attachment.type)
+		elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
+			for _, winid in ipairs(workspace.windows) do
+				vim.api.nvim_win_close(winid, false)
+			end
+		end
+
+		for _, bufid in ipairs(workspace.buffers) do
+			self:workspace_detach_component(workspace, self:get_component(bufid, ComponentTypes.buffer))
 		end
 	end
 end
@@ -416,35 +422,35 @@ end
 --- assign current active buffer(s) to workspace
 function Manager:workspace_attach(workspace, target_type, target_id)
 	if workspace.state == Workspace.STATE.attached then
-		self:workspace_detach(workspace.id)
+		self:workspace_detach(workspace)
 	end
 
 	--- no explicit target_id used, just grab everything that isn't already attached to a workspace
 	if target_type == Workspace.ATTACHMENT_MODE.global then
 		for id, tab in pairs(self.tabs) do
 			if #tab.workspaces == 0 then
-				self:workspace_tab_attach(id, wsid)
+				self:workspace_attach_component(workspace, tab)
 			end
 
 			for winid in vim.api.nvim_tabpage_list_wins(id) do
 				local window = self:component_is_valid(winid, ComponentTypes.window)
 					and self:get_component(winid, ComponentTypes.window)
 				if window and #window.workspaces == 0 then
-					self:workspace_window_attach(winid, wsid)
+					self:workspace_attach_component(workspace, window)
 				end
 			end
 		end
 
-		for id, buffer in self.buffers do
+		for id, buffer in pairs(self.buffers) do
 			if #buffer.workspaces == 0 then
 				if Config.options.buffer_capture_method == "listed" then
-					self:workspace_buffer_attach(id, wsid)
+					self:workspace_attach_component(workspace, buffer)
 				elseif Config.options.buffer_capture_method == "loaded" and vim.api.nvim_buf_is_loaded(id) then
-					self:workspace_buffer_attach(id, wsid)
+					self:workspace_attach_component(workspace, buffer)
 				elseif Config.options.buffer_capture_method == "opened" then
-					for winid in ipairs(workspace.windows) do
+					for winid in pairs(workspace.windows) do
 						if vim.api.nvim_win_get_buf(winid) == id then
-							self:workspace_buffer_attach(id, wsid)
+							self:workspace_attach_component(workspace, buffer)
 						end
 					end
 				end
@@ -452,32 +458,50 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 		end
 	--- Use provided target_id, so will error if target is already attached to workspace
 	elseif target_type == Workspace.ATTACHMENT_MODE.tab then
-		local tab = self:get_component(target_id, ComponentTypes.tab)
-		self:workspace_tab_attach(tab.id, wsid)
+		local tab = self:component_is_valid(target_id, ComponentTypes.window)
+			and self:get_component(target_id, ComponentTypes.tab)
+		if tab then
+			if #tab.workspaces == 0 then
+				self:workspace_attach_component(workspace, tab)
+			else
+				error("Tab " .. target_id .. " is already attached to workspace " .. tab.workspaces[1])
+			end
+		else
+			error("Invalid tabpage id: " .. target_id)
+		end
 
 		for winid in vim.api.nvim_tabpage_list_wins(tab.id) do
 			local window = self:component_is_valid(winid, ComponentTypes.window)
 				and self:get_component(winid, ComponentTypes.window)
 			if window and #window.workspaces == 0 then
-				self:workspace_window_attach(winid, wsid)
+				self:workspace_attach_component(workspace, window)
 
 				local bufid = vim.api.nvim_win_get_buf(winid)
 				local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
 					and self:get_component(bufid, ComponentTypes.buffer)
 				if buffer then
-					self:workspace_buffer_attach(bufid, wsid)
+					self:workspace_attach_component(workspace, buffer)
 				end
 			end
 		end
 	elseif target_type == Workspace.ATTACHMENT_MODE.window then
-		local window = self:get_component(target_id, ComponentTypes.window)
-		self:workspace_window_attach(window.id, wsid)
+		local window = self:component_is_valid(target_id, ComponentTypes.window)
+			and self:get_component(target_id, ComponentTypes.window)
+		if window then
+			if #window.workspaces == 0 then
+				self:workspace_attach_component(workspace, window)
+			else
+				error("Window " .. target_id .. " is already attached to workspace " .. window.workspaces[1])
+			end
+		else
+			error("Invalid window id: " .. target_id)
+		end
 
 		local bufid = vim.api.nvim_win_get_buf(window.id)
 		local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
 			and self:get_component(bufid, ComponentTypes.buffer)
 		if buffer then
-			self:workspace_buffer_attach(bufid, wsid)
+			self:workspace_attach_component(workspace, buffer)
 		end
 	else
 		--- Invalid target_type should be hangled by Manager or API before this function is called
@@ -545,7 +569,7 @@ function Manager:focus_on_workspace(workspace)
 	--- save cursor location on workspace exit to jump back on reenter
 	if workspace.state == Workspace.STATE.attached then
 		local attachment_mode = workspace:attachment_mode()
-		if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
+		if attachment_mode == (Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab) then
 			vim.api.nvim_set_current_tabpage(workspace.tabs[1])
 		elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
 			vim.api.nvim_set_current_win(workspace.windows[1])
@@ -579,7 +603,7 @@ function Manager:workspace_attach_component(workspace, component)
 		error(ret)
 	end
 
-	table.insert(workspace.tabs, component.id)
+	table.insert(tbl, component.id)
 
 	if workspace.STATE.active then
 		component:set_visible()
