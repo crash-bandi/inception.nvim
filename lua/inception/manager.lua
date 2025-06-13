@@ -7,6 +7,7 @@ local Config = require("inception.config")
 local Utils = require("inception.utils")
 
 ---@class Inception.Manager
+---@field initialized  boolean
 ---@field workspaces { number: Inception.Workspace }
 ---@field tab { number: Inception.Component.Tab }
 ---@field win { number: Inception.Component.Window }
@@ -14,8 +15,10 @@ local Utils = require("inception.utils")
 ---@field name_map { string: number }
 ---@field active_workspace number
 ---@field attached_workspaces number[]
+---@field options Inception.Manager.Options
 local Manager = {}
 Manager.__index = Manager
+Manager.initialized = false
 Manager.workspaces = {}
 Manager.tabs = {}
 Manager.windows = {}
@@ -23,6 +26,21 @@ Manager.buffers = {}
 Manager.name_map = {}
 Manager.active_workspace = nil
 Manager.attached_workspaces = {}
+
+---@enum Inception.Manager.BufferCaptureMethod
+Manager.BufferCaptureMethod = {
+	listed = 1,
+	loaded = 2,
+	active = 3,
+}
+
+---@class Inception.Manager.Options
+---@field buffer_capture_method Inception.Manager.BufferCaptureMethod
+---@field exit_on_last_tab_close boolean
+Manager.options = {
+	buffer_capture_method = Manager.BufferCaptureMethod[Config.options.buffer_capture_method],
+	exit_on_last_tab_close = Config.options.exit_on_last_tab_close,
+}
 
 ---@return number
 --- Gets next available workspace id, filling in gaps
@@ -32,6 +50,20 @@ function Manager:get_next_available_id()
 		id = id + 1
 	end
 	return id
+end
+
+function Manager:init()
+	for _, tabid in ipairs(vim.api.nvim_list_tabpages()) do
+		self:handle_tabpage_new_event({ tab = tabid })
+	end
+
+	for _, winid in ipairs(vim.api.nvim_list_wins()) do
+		self:handle_win_new_event({ win = winid })
+	end
+
+	for _, bufid in ipairs(vim.api.nvim_list_bufs()) do
+		self:handle_new_buffer_event({ buf = bufid })
+	end
 end
 
 ---@param name string
@@ -222,8 +254,6 @@ function Manager:get_component(id, type)
 		return component
 	end
 
-	print(id)
-	print(type)
 	error("Invalid " .. type .. " id: " .. id)
 end
 
@@ -364,10 +394,12 @@ function Manager:workspace_open(workspace, mode)
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
 			local target_id = nil
-			if
-				attachment_mode == Workspace.ATTACHMENT_MODE.global
-				or attachment_mode == Workspace.ATTACHMENT_MODE.tab
-			then
+			if attachment_mode == Workspace.ATTACHMENT_MODE.global then
+				if self.active_workspace then
+					vim.cmd("tabnew")
+					target_id = vim.api.nvim_get_current_tabpage()
+				end
+			elseif attachment_mode == Workspace.ATTACHMENT_MODE.tab then
 				vim.cmd("tabnew")
 				target_id = vim.api.nvim_get_current_tabpage()
 			elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
@@ -407,7 +439,7 @@ function Manager:workspace_close(workspace)
 					end
 				end
 			else
-				if Config.options.exit_on_last_tab_close then
+				if self.options.exit_on_last_tab_close then
 					vim.cmd("tabclose")
 				end
 			end
@@ -442,7 +474,7 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 				self:workspace_attach_component(workspace, tab)
 			end
 
-			for winid in vim.api.nvim_tabpage_list_wins(id) do
+			for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(id)) do
 				local window = self:component_is_valid(winid, Component.Types.window)
 					and self:get_component(winid, Component.Types.window)
 				if window and #window.workspaces == 0 then
@@ -453,11 +485,14 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 
 		for id, buffer in pairs(self.buffers) do
 			if #buffer.workspaces == 0 then
-				if Config.options.buffer_capture_method == "listed" then
+				if self.options.buffer_capture_method == Manager.BufferCaptureMethod.listed then
 					self:workspace_attach_component(workspace, buffer)
-				elseif Config.options.buffer_capture_method == "loaded" and vim.api.nvim_buf_is_loaded(id) then
+				elseif
+					self.options.buffer_capture_method == Manager.BufferCaptureMethod.loaded
+					and vim.api.nvim_buf_is_loaded(id)
+				then
 					self:workspace_attach_component(workspace, buffer)
-				elseif Config.options.buffer_capture_method == "opened" then
+				elseif self.options.buffer_capture_method == Manager.BufferCaptureMethod.active then
 					for winid in pairs(workspace.windows) do
 						if vim.api.nvim_win_get_buf(winid) == id then
 							self:workspace_attach_component(workspace, buffer)
@@ -696,6 +731,16 @@ function Manager:workspace_detach_component(workspace, component)
 		error("Internal Error - Invalid component type.")
 	end
 
+	if component.type == Component.Types.tab then
+		for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(component.id)) do
+			local win_comp = self:component_is_valid(winid, Component.Types.window)
+				and self:get_component(winid, Component.Types.window)
+			if win_comp and vim.tbl_contains(win_comp.workspaces, workspace.id) then
+				self:workspace_detach_component(workspace, win_comp)
+			end
+		end
+	end
+
 	for i, id in ipairs(tbl) do
 		if id == component.id then
 			table.remove(tbl, i)
@@ -922,6 +967,10 @@ function Manager:handle_buffer_wipeout_event(args)
 
 		self:release_component(buffer)
 	end
+end
+
+if not Manager.initialized then
+	Manager:init()
 end
 
 return Manager

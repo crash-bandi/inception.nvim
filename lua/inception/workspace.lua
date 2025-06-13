@@ -1,4 +1,5 @@
-local ComponentTypes = require("inception.component").Types
+local Component = require("inception.component")
+local Config = require("inception.config")
 local Utils = require("inception.utils")
 
 ---@class Inception.Workspace
@@ -52,7 +53,7 @@ Workspace._new = {
 	buffers = {},
 	---@type Inception.Workspace.Options
 	options = {
-		attachment_mode = Workspace.ATTACHMENT_MODE.global,
+		attachment_mode = Workspace.ATTACHMENT_MODE[Config.options.default_attachment_mode],
 		multi_root_mode = Workspace.MULTI_ROOT_MODE.disabled,
 	},
 }
@@ -93,17 +94,19 @@ function Workspace:attachment_mode()
 		return Workspace.ATTACHMENT_MODE.tab
 	elseif #self.windows > 0 then
 		return Workspace.ATTACHMENT_MODE.window
+	else
+		error("Internal error - not attachment mode")
 	end
 end
 
 ---@param type Inception.Component.Type
 ---@return number[]
 function Workspace:get_components(type)
-	if type == ComponentTypes.tab then
+	if type == Component.Types.tab then
 		return self.tabs
-	elseif type == ComponentTypes.window then
+	elseif type == Component.Types.window then
 		return self.windows
-	elseif type == ComponentTypes.buffer then
+	elseif type == Component.Types.buffer then
 		return self.buffers
 	else
 		error("Internal error - Invalid component type: " .. type)

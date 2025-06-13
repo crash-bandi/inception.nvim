@@ -1,4 +1,5 @@
 local Manager = require("inception.manager")
+local Workspace = require("inception.workspace")
 
 ---@class Inception.Api
 local api = {}
@@ -41,18 +42,25 @@ function api.get_workspace(name)
 		return
 	end
 
-	local _, ret = pcall(Manager.get_workspace_by_name, Manager, name)
+	local ok, ret = pcall(Manager.get_workspace_by_name, Manager, name)
+	if not ok then
+		vim.notify("Workspace " .. name .. " not found.")
+	end
 
 	return ret and ret.id or nil
 end
 
 ---@param wsid number workspace id
----@param mode? "tab" | "win" open mode
+---@param mode? "global" | "tab" | "win" open mode
 function api.open_workspace(wsid, mode)
-	local ok, ret = pcall(Manager.workspace_open, Manager, wsid, mode)
-
-	if not ok then
-		vim.notify(ret, vim.log.levels.ERROR)
+	local get_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
+	if get_workspace then
+		local open_workspace, ret = pcall(Manager.workspace_open, Manager, workspace, Workspace.ATTACHMENT_MODE[mode])
+		if not open_workspace then
+			vim.notify(ret, vim.log.levels.ERROR)
+		end
+	else
+		vim.notify(workspace, vim.log.levels.ERROR)
 	end
 end
 
@@ -127,19 +135,22 @@ end
 
 ---@param wsid number
 function api.set_workspace(wsid)
-	local ok, ret = pcall(Manager.get_workspace, Manager, wsid)
+	local ok, workspace = pcall(Manager.get_workspace, Manager, wsid)
 
 	if not ok then
-		vim.notify(ret, vim.log.levels.ERROR)
+		vim.notify(workspace, vim.log.levels.ERROR)
 		return
 	end
 
-	if not vim.tbl_contains(Manager.attached_workspaces, wsid) then
-		vim.notify("Workspace '" .. wsid .. " (" .. ret.name .. ")' is not attached to anything.", vim.log.levels.ERROR)
+	if not vim.tbl_contains(Manager.attached_workspaces, workspace.id) then
+		vim.notify(
+			"Workspace '" .. workspace.id .. " (" .. workspace.name .. ")' is not attached to anything.",
+			vim.log.levels.ERROR
+		)
 		return
 	end
 
-	local ok2, err = pcall(Manager.focus_on_workspace, Manager, wsid)
+	local ok2, err = pcall(Manager.focus_on_workspace, Manager, workspace)
 
 	if not ok2 then
 		vim.notify(err, vim.log.levels.ERROR)
