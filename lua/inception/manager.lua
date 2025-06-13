@@ -142,6 +142,7 @@ function Manager:capture_component(id, type)
 			return
 		end
 		tbl[component.id] = component
+
 		return component.id
 	end
 
@@ -468,7 +469,7 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 	end
 
 	--- no explicit target_id used, just grab everything that isn't already attached to a workspace
-	if target_type == Workspace.ATTACHMENT_MODE.global then
+	if target_type == Workspace.ATTACHMENT_MODE.global and not target_id then
 		for id, tab in pairs(self.tabs) do
 			if #tab.workspaces == 0 then
 				self:workspace_attach_component(workspace, tab)
@@ -502,7 +503,9 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 			end
 		end
 	--- Use provided target_id, so will error if target is already attached to workspace
-	elseif target_type == Workspace.ATTACHMENT_MODE.tab then
+	elseif
+		target_type == Workspace.ATTACHMENT_MODE.tab or (target_type == Workspace.ATTACHMENT_MODE.global and target_id)
+	then
 		local tab = self:component_is_valid(target_id, Component.Types.tab)
 			and self:get_component(target_id, Component.Types.tab)
 		if tab then
@@ -811,8 +814,9 @@ end
 ---@param args {tab: number}
 function Manager:handle_tabpage_new_event(args)
 	local tabid = self:capture_component(args.tab, Component.Types.tab)
-
-	if tabid and self.active_workspace then
+	---TODO this fails because tab exit is performed first, meaning there is no active workspace at this point
+  if tabid and self.active_workspace then
+    print("trying to attach tab " .. tostring(self:get_component(tabid, Component.Types.tab).id) .. " to workspace " .. self:get_workspace(self.active_workspace).name )
 		self:workspace_attach_component(
 			self:get_workspace(self.active_workspace),
 			self:get_component(tabid, Component.Types.tab)
@@ -865,8 +869,8 @@ function Manager:handle_tabpage_closed_event()
 
 	for _, workspace in pairs(self.workspaces) do
 		if
-			workspace.state == Workspace.STATE.attached
-			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab)
+			(workspace.state == Workspace.STATE.active or workspace.state == Workspace.STATE.attached)
+			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.tab)
 			and vim.list_contains(workspace.tabs, component.id)
 		then
 			self:workspace_detach_component(workspace, component)

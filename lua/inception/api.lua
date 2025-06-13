@@ -73,7 +73,12 @@ function api.close_workspace(wsid)
 		return
 	end
 
-	local ok, ret = pcall(Manager.workspace_close, Manager, wsid)
+  local got_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
+  if not got_workspace then
+    vim.notify("Workspace " .. wsid .. " does not exist")
+  end
+
+	local ok, ret = pcall(Manager.workspace_close, Manager, workspace)
 
 	if not ok then
 		vim.notify(ret, vim.log.levels.ERROR)

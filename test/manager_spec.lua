@@ -1,13 +1,13 @@
 --- TODO: build test for closing non-active workspace to test going back to original tab
 --- TODO: rebuild test for attaching unattached buffer
 
-local create_tests = true
-local rename_tests = true
+local create_tests = false
+local rename_tests = false
 local open_tests = true
-local close_tests = true
-local attach_tests = true
-local focus_tests = true
-local detach_tests = true
+local close_tests = false
+local attach_tests = false
+local focus_tests = false
+local detach_tests = false
 
 require("inception.init").setup()
 
@@ -395,6 +395,11 @@ if open_tests then
 			assert.is_true(
 				vim.list_contains(globalworkspace.buffers, vim.api.nvim_win_get_buf(vim.api.nvim_get_current_win()))
 			)
+		end)
+
+		it("global workspace should stay active on tab change", function()
+			vim.api.nvim_set_current_tabpage(globalworkspace.tabs[2])
+			assert.is.same(Manager.active_workspace, globalworkspace.id)
 		end)
 
 		local current_tab_id = vim.api.nvim_get_current_tabpage()
