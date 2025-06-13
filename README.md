@@ -64,3 +64,4 @@ Its goal is to give Neovim users powerful tools for organizing tabs, windows, an
 ### 💾 State Management
 - ➡ *Planned*: Save all necessary state to restore workspaces fully on relaunch.
 - Simple overwrite model for now, with potential future refinements.
+
