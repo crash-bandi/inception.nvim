@@ -1,5 +1,5 @@
 local Workspace = require("inception.workspace")
-local ComponentTypes = require("inception.component").Types
+local Component = require("inception.component")
 local Tab = require("inception.component").Tab
 local Window = require("inception.component").Window
 local Buffer = require("inception.component").Buffer
@@ -92,15 +92,15 @@ function Manager:capture_component(id, type)
 	if not self:component_is_valid(id, type) then
 		local class = nil
 		local tbl = nil
-		if type == ComponentTypes.buffer then
-			class = Tab
+		if type == Component.Types.buffer then
+			class = Buffer
 			tbl = self.buffers
-		elseif type == ComponentTypes.window then
+		elseif type == Component.Types.window then
 			class = Window
 			tbl = self.windows
-		elseif type == ComponentTypes.tab then
+		elseif type == Component.Types.tab then
 			class = Tab
-			tbl = self.buffers
+			tbl = self.tabs
 		else
 			error("Internal error - Invalid component type: " .. type)
 		end
@@ -163,11 +163,11 @@ end
 
 ---@param component Inception.Component
 function Manager:release_component(component)
-	if component.type == ComponentTypes.buffer then
+	if component.type == Component.Types.buffer then
 		self.buffers[component.id] = nil
-	elseif component.type == ComponentTypes.window then
+	elseif component.type == Component.Types.window then
 		self.windows[component.id] = nil
-	elseif component.type == ComponentTypes.tab then
+	elseif component.type == Component.Types.tab then
 		self.tabs[component.id] = nil
 	end
 end
@@ -210,12 +210,11 @@ end
 ---@return Inception.Component
 function Manager:get_component(id, type)
 	local component = nil
-
-	if type == ComponentTypes.buffer then
+	if type == Component.Types.buffer then
 		component = self.buffers[id]
-	elseif type == ComponentTypes.window then
+	elseif type == Component.Types.window then
 		component = self.windows[id]
-	elseif type == ComponentTypes.tab then
+	elseif type == Component.Types.tab then
 		component = self.tabs[id]
 	end
 
@@ -223,6 +222,8 @@ function Manager:get_component(id, type)
 		return component
 	end
 
+	print(id)
+	print(type)
 	error("Invalid " .. type .. " id: " .. id)
 end
 
@@ -276,8 +277,7 @@ end
 ---@return boolean
 --- Return if workspace <wsid> exists
 function Manager:workspace_is_valid(wsid)
-	local ok, _ = pcall(self.get_workspace, self, wsid)
-	return ok
+	return vim.list_contains(vim.tbl.keys(self.workspaces), wsid)
 end
 
 ---@param id number
@@ -285,8 +285,15 @@ end
 ---@return boolean
 --- Return if component <type> <id> exists
 function Manager:component_is_valid(id, type)
-	local ok, _ = pcall(self.get_component, self, id, type)
-	return ok
+	if type == Component.Types.buffer then
+		return vim.list_contains(vim.tbl_keys(self.buffers), id)
+	elseif type == Component.Types.window then
+		return vim.list_contains(vim.tbl_keys(self.windows), id)
+	elseif type == Component.Types.tab then
+		return vim.list_contains(vim.tbl_keys(self.tabs), id)
+	else
+		error("Internal error - Invalid component type")
+	end
 end
 
 -- ---@param tabid number
@@ -357,7 +364,10 @@ function Manager:workspace_open(workspace, mode)
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
 			local target_id = nil
-			if attachment_mode == (Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab) then
+			if
+				attachment_mode == Workspace.ATTACHMENT_MODE.global
+				or attachment_mode == Workspace.ATTACHMENT_MODE.tab
+			then
 				vim.cmd("tabnew")
 				target_id = vim.api.nvim_get_current_tabpage()
 			elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
@@ -384,9 +394,7 @@ function Manager:workspace_close(workspace)
 	end
 
 	if workspace.state == Workspace.STATE.attached then
-		self:workspace_detach(workspace)
-
-		if attachment_mode == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab then
+		if attachment_mode == Workspace.ATTACHMENT_MODE.global or attachment_mode == Workspace.ATTACHMENT_MODE.tab then
 			if #vim.api.nvim_list_tabpages() > 1 then
 				local current_tabpage = vim.api.nvim_get_current_tabpage()
 				for _, tabid in ipairs(workspace.tabs) do
@@ -410,8 +418,10 @@ function Manager:workspace_close(workspace)
 		end
 
 		for _, bufid in ipairs(workspace.buffers) do
-			self:workspace_detach_component(workspace, self:get_component(bufid, ComponentTypes.buffer))
+			self:workspace_detach_component(workspace, self:get_component(bufid, Component.Types.buffer))
 		end
+
+		self:workspace_detach(workspace)
 	end
 end
 
@@ -433,8 +443,8 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 			end
 
 			for winid in vim.api.nvim_tabpage_list_wins(id) do
-				local window = self:component_is_valid(winid, ComponentTypes.window)
-					and self:get_component(winid, ComponentTypes.window)
+				local window = self:component_is_valid(winid, Component.Types.window)
+					and self:get_component(winid, Component.Types.window)
 				if window and #window.workspaces == 0 then
 					self:workspace_attach_component(workspace, window)
 				end
@@ -458,8 +468,8 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 		end
 	--- Use provided target_id, so will error if target is already attached to workspace
 	elseif target_type == Workspace.ATTACHMENT_MODE.tab then
-		local tab = self:component_is_valid(target_id, ComponentTypes.window)
-			and self:get_component(target_id, ComponentTypes.tab)
+		local tab = self:component_is_valid(target_id, Component.Types.tab)
+			and self:get_component(target_id, Component.Types.tab)
 		if tab then
 			if #tab.workspaces == 0 then
 				self:workspace_attach_component(workspace, tab)
@@ -470,23 +480,23 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 			error("Invalid tabpage id: " .. target_id)
 		end
 
-		for winid in vim.api.nvim_tabpage_list_wins(tab.id) do
-			local window = self:component_is_valid(winid, ComponentTypes.window)
-				and self:get_component(winid, ComponentTypes.window)
+		for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(tab.id)) do
+			local window = self:component_is_valid(winid, Component.Types.window)
+				and self:get_component(winid, Component.Types.window)
 			if window and #window.workspaces == 0 then
 				self:workspace_attach_component(workspace, window)
 
 				local bufid = vim.api.nvim_win_get_buf(winid)
-				local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
-					and self:get_component(bufid, ComponentTypes.buffer)
+				local buffer = self:component_is_valid(bufid, Component.Types.buffer)
+					and self:get_component(bufid, Component.Types.buffer)
 				if buffer then
 					self:workspace_attach_component(workspace, buffer)
 				end
 			end
 		end
 	elseif target_type == Workspace.ATTACHMENT_MODE.window then
-		local window = self:component_is_valid(target_id, ComponentTypes.window)
-			and self:get_component(target_id, ComponentTypes.window)
+		local window = self:component_is_valid(target_id, Component.Types.window)
+			and self:get_component(target_id, Component.Types.window)
 		if window then
 			if #window.workspaces == 0 then
 				self:workspace_attach_component(workspace, window)
@@ -498,8 +508,8 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 		end
 
 		local bufid = vim.api.nvim_win_get_buf(window.id)
-		local buffer = self:component_is_valid(bufid, ComponentTypes.buffer)
-			and self:get_component(bufid, ComponentTypes.buffer)
+		local buffer = self:component_is_valid(bufid, Component.Types.buffer)
+			and self:get_component(bufid, Component.Types.buffer)
 		if buffer then
 			self:workspace_attach_component(workspace, buffer)
 		end
@@ -518,7 +528,7 @@ function Manager:workspace_detach(workspace)
 	workspace:desync_cwd()
 
 	--- remove all attached components
-	for _, type in ipairs(vim.tbl_values(ComponentTypes)) do
+	for _, type in ipairs(vim.tbl_values(Component.Types)) do
 		for _, id in ipairs(vim.deepcopy(workspace:get_components(type))) do
 			self:workspace_detach_component(workspace, self:get_component(id, type))
 		end
@@ -569,7 +579,7 @@ function Manager:focus_on_workspace(workspace)
 	--- save cursor location on workspace exit to jump back on reenter
 	if workspace.state == Workspace.STATE.attached then
 		local attachment_mode = workspace:attachment_mode()
-		if attachment_mode == (Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab) then
+		if attachment_mode == Workspace.ATTACHMENT_MODE.global or attachment_mode == Workspace.ATTACHMENT_MODE.tab then
 			vim.api.nvim_set_current_tabpage(workspace.tabs[1])
 		elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
 			vim.api.nvim_set_current_win(workspace.windows[1])
@@ -584,11 +594,11 @@ end
 --- Attach component <id> to workspace <wsid>
 function Manager:workspace_attach_component(workspace, component)
 	local tbl = nil
-	if component.type == ComponentTypes.buffer then
+	if component.type == Component.Types.buffer then
 		tbl = workspace.buffers
-	elseif component.type == ComponentTypes.window then
+	elseif component.type == Component.Types.window then
 		tbl = workspace.windows
-	elseif component.type == ComponentTypes.tab then
+	elseif component.type == Component.Types.tab then
 		tbl = workspace.tabs
 	else
 		error("Internal Error - Invalid component type.")
@@ -676,11 +686,11 @@ end
 -- Detach tab <tabid> from workspace <wsid>
 function Manager:workspace_detach_component(workspace, component)
 	local tbl = nil
-	if component.type == ComponentTypes.buffer then
+	if component.type == Component.Types.buffer then
 		tbl = workspace.buffers
-	elseif component.type == ComponentTypes.window then
+	elseif component.type == Component.Types.window then
 		tbl = workspace.windows
-	elseif component.type == ComponentTypes.tab then
+	elseif component.type == Component.Types.tab then
 		tbl = workspace.tabs
 	else
 		error("Internal Error - Invalid component type.")
@@ -755,12 +765,12 @@ end
 
 ---@param args {tab: number}
 function Manager:handle_tabpage_new_event(args)
-	local tabid = self:capture_component(args.tab, ComponentTypes.tab)
+	local tabid = self:capture_component(args.tab, Component.Types.tab)
 
 	if tabid and self.active_workspace then
 		self:workspace_attach_component(
 			self:get_workspace(self.active_workspace),
-			self:get_component(tabid, ComponentTypes.tab)
+			self:get_component(tabid, Component.Types.tab)
 		)
 	end
 end
@@ -806,7 +816,7 @@ function Manager:handle_tabpage_closed_event()
 	if #tabid > 1 then
 		error("Internal error - invalid tab components greater than 1.")
 	end
-	local component = self:get_component(tabid[1], ComponentTypes.tab)
+	local component = self:get_component(tabid[1], Component.Types.tab)
 
 	for _, workspace in pairs(self.workspaces) do
 		if
@@ -826,8 +836,8 @@ end
 
 ---@param args { win: number }
 function Manager:handle_win_new_event(args)
-	local winid = self:capture_component(args.win, ComponentTypes.window)
-	local window = winid and self:get_component(winid, ComponentTypes.window)
+	local winid = self:capture_component(args.win, Component.Types.window)
+	local window = winid and self:get_component(winid, Component.Types.window)
 
 	if window and self.active_workspace then
 		self:workspace_attach_component(self:get_workspace(self.active_workspace), window)
@@ -837,12 +847,12 @@ end
 ---@param args { win: number }
 function Manager:handle_win_enter_event(args)
 	--- if a workspace is attached to this window, enter it.
-	if not self:component_is_valid(args.win, ComponentTypes.window) then
+	if not self:component_is_valid(args.win, Component.Types.window) then
 		return
 	end
 
 	for _, workspace in pairs(self.workspaces) do
-		if workspace.state == Workspace.STATE.attached and vim.tbl_contain(workspace.windows, args.win) then
+		if workspace.state == Workspace.STATE.attached and vim.tbl_contains(workspace.windows, args.win) then
 			self:workspace_enter(workspace)
 			return
 		end
@@ -854,7 +864,7 @@ end
 
 ---@param args { win: number }
 function Manager:handle_win_leave_event(args)
-	if not self:component_is_valid(args.win, ComponentTypes.window) then
+	if not self:component_is_valid(args.win, Component.Types.window) then
 		return
 	end
 
@@ -868,8 +878,8 @@ end
 
 ---@param args { win: number }
 function Manager:handle_win_closed_event(args)
-	local window = self:component_is_valid(args.win, ComponentTypes.window)
-		and self:get_component(args.win, ComponentTypes.window)
+	local window = self:component_is_valid(args.win, Component.Types.window)
+		and self:get_component(args.win, Component.Types.window)
 
 	if window then
 		for _, workspace in pairs(self.workspaces) do
@@ -890,8 +900,8 @@ end
 
 ---@param args { buf: number }
 function Manager:handle_new_buffer_event(args)
-	local bufid = self:capture_component(args.buf, ComponentTypes.buffer)
-	local buffer = bufid and self:get_component(bufid, ComponentTypes.buffer)
+	local bufid = self:capture_component(args.buf, Component.Types.buffer)
+	local buffer = bufid and self:get_component(bufid, Component.Types.buffer)
 
 	if buffer and self.active_workspace then
 		self:workspace_attach_component(self:get_workspace(self.active_workspace), buffer)
@@ -900,8 +910,8 @@ end
 
 ---@param args { buf: number }
 function Manager:handle_buffer_wipeout_event(args)
-	local buffer = self:component_is_valid(args.buf, ComponentTypes.buffer)
-		and self:get_component(args.buf, ComponentTypes.buffer)
+	local buffer = self:component_is_valid(args.buf, Component.Types.buffer)
+		and self:get_component(args.buf, Component.Types.buffer)
 
 	if buffer then
 		for _, workspace in pairs(self.workspaces) do

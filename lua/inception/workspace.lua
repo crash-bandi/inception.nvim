@@ -161,7 +161,7 @@ end
 function Workspace:select_directory(root_dir)
 	self.current_working_directory = root_dir
 
-	if self.state == Workspace.STATE.attached then
+	if self.state == (Workspace.STATE.active or Workspace.STATE.attached) then
 		self:sync_cwd()
 	end
 end
@@ -181,11 +181,11 @@ function Workspace:desync_cwd()
 	local root_cwd = vim.fn.getcwd(-1, -1)
 	local original_tab = vim.api.nvim_get_current_tabpage()
 
-	for tabid in ipairs(self.tabs) do
+	for _, tabid in ipairs(self.tabs) do
 		vim.api.nvim_set_current_tabpage(tabid)
 		vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
 	end
-	for winid in ipairs(self.windows) do
+	for _, winid in ipairs(self.windows) do
 		vim.api.nvim_win_call(winid, function()
 			vim.fn.chdir(root_cwd)
 		end)
