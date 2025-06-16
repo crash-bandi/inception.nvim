@@ -8,12 +8,12 @@ local Utils = require("inception.utils")
 
 ---@class Inception.Manager
 ---@field initialized  boolean
+---@field state Inception.Manager.State
 ---@field workspaces { number: Inception.Workspace }
 ---@field tab { number: Inception.Component.Tab }
 ---@field win { number: Inception.Component.Window }
 ---@field buffers { number: Inception.Component.Buffer }
 ---@field name_map { string: number }
----@field active_workspace number
 ---@field attached_workspaces number[]
 ---@field options Inception.Manager.Options
 local Manager = {}
@@ -24,7 +24,6 @@ Manager.tabs = {}
 Manager.windows = {}
 Manager.buffers = {}
 Manager.name_map = {}
-Manager.active_workspace = nil
 Manager.attached_workspaces = {}
 
 ---@enum Inception.Manager.BufferCaptureMethod
@@ -34,6 +33,15 @@ Manager.BufferCaptureMethod = {
 	active = 3,
 }
 
+---@class Inception.Manager.State
+---@field last_workspace number
+---@field last_tab number
+---@field last_window number
+---@field active_workspace number
+---@field active_tab number
+---@field active_window number
+Manager.state = {}
+
 ---@class Inception.Manager.Options
 ---@field buffer_capture_method Inception.Manager.BufferCaptureMethod
 ---@field exit_on_last_tab_close boolean
@@ -41,16 +49,6 @@ Manager.options = {
 	buffer_capture_method = Manager.BufferCaptureMethod[Config.options.buffer_capture_method],
 	exit_on_last_tab_close = Config.options.exit_on_last_tab_close,
 }
-
----@return number
---- Gets next available workspace id, filling in gaps
-function Manager:get_next_available_id()
-	local id = 1
-	while self.workspaces[id] do
-		id = id + 1
-	end
-	return id
-end
 
 function Manager:init()
 	for _, tabid in ipairs(vim.api.nvim_list_tabpages()) do
@@ -64,6 +62,9 @@ function Manager:init()
 	for _, bufid in ipairs(vim.api.nvim_list_bufs()) do
 		self:handle_new_buffer_event({ buf = bufid })
 	end
+
+	self.state.active_tab = vim.api.nvim_get_current_tabpage()
+	self.state.active_window = vim.api.nvim_get_current_win()
 end
 
 ---@param name string
@@ -104,6 +105,16 @@ function Manager:workspace_create(name, dirs, options)
 	self.name_map[name] = id
 
 	return workspace
+end
+
+---@return number
+--- Gets next available workspace id, filling in gaps
+function Manager:get_next_available_id()
+	local id = 1
+	while self.workspaces[id] do
+		id = id + 1
+	end
+	return id
 end
 
 ---@param workspace Inception.Workspace
@@ -149,51 +160,6 @@ function Manager:capture_component(id, type)
 	return id
 end
 
--- ---@param tabid number
--- ---@return number | nil
--- function Manager:capture_tab(tabid)
--- 	if not self:tab_is_valid(tabid) then
--- 		local tab = Tab:new(tabid)
--- 		if not tab then
--- 			return
--- 		end
--- 		self.tabs[tab.id] = tab
--- 		return tab.id
--- 	end
---
--- 	return tabid
--- end
---
--- ---@param winid number
--- ---@return number | nil
--- function Manager:capture_window(winid)
--- 	if not self:window_is_valid(winid) then
--- 		local window = Window:new(winid)
--- 		if not window then
--- 			return
--- 		end
--- 		self.windows[window.id] = window
--- 		return window.id
--- 	end
---
--- 	return winid
--- end
---
--- ---@param bufnr number
--- ---@return number | nil
--- function Manager:capture_buffer(bufnr)
--- 	if not self:buffer_is_valid(bufnr) then
--- 		local buffer = Buffer:new(bufnr)
--- 		if not buffer then
--- 			return
--- 		end
--- 		self.buffers[buffer.id] = buffer
--- 		return buffer.id
--- 	end
---
--- 	return bufnr
--- end
-
 ---@param component Inception.Component
 function Manager:release_component(component)
 	if component.type == Component.Types.buffer then
@@ -204,27 +170,6 @@ function Manager:release_component(component)
 		self.tabs[component.id] = nil
 	end
 end
-
--- ---@param tabid number
--- function Manager:release_tab(tabid)
--- 	if self:tab_is_valid(tabid) then
--- 		self.tabs[tabid] = nil
--- 	end
--- end
---
--- ---@param winid number
--- function Manager:release_window(winid)
--- 	if self:window_is_valid(winid) then
--- 		self.windows[winid] = nil
--- 	end
--- end
---
--- ---@param bufnr number
--- function Manager:release_buffer(bufnr)
--- 	if self:buffer_is_valid(bufnr) then
--- 		self.buffers[bufnr] = nil
--- 	end
--- end
 
 ---@param wsid number
 ---@return Inception.Workspace
@@ -268,42 +213,6 @@ function Manager:get_components()
 	return components
 end
 
--- ---@param tabid number
--- ---@return Inception.Component.Tab
--- function Manager:get_tab(tabid)
--- 	local tab = self.tabs[tabid]
---
--- 	if tab then
--- 		return tab
--- 	end
---
--- 	error("Invalid tab id: " .. tabid)
--- end
---
--- ---@param winid number
--- ---@return Inception.Component.Window
--- function Manager:get_window(winid)
--- 	local window = self.windows[winid]
---
--- 	if window then
--- 		return window
--- 	end
---
--- 	error("Invalid window id: " .. winid)
--- end
---
--- ---@param bufnr number
--- ---@return Inception.Component.Buffer
--- function Manager:get_buffer(bufnr)
--- 	local buffer = self.buffers[bufnr]
---
--- 	if buffer then
--- 		return buffer
--- 	end
---
--- 	error("Invalid buffer id: " .. bufnr)
--- end
-
 ---@param wsid string
 ---@return boolean
 --- Return if workspace <wsid> exists
@@ -326,30 +235,6 @@ function Manager:component_is_valid(id, type)
 		error("Internal error - Invalid component type")
 	end
 end
-
--- ---@param tabid number
--- ---@return boolean
--- --- Return if tab <tabid> exists
--- function Manager:tab_is_valid(tabid)
--- 	local ok, _ = pcall(self.get_tab, self, tabid)
--- 	return ok
--- end
---
--- ---@param winid number
--- ---@return boolean
--- --- Return if window <winid> exists
--- function Manager:window_is_valid(winid)
--- 	local ok, _ = pcall(self.get_window, self, winid)
--- 	return ok
--- end
---
--- ---@param bufnr number
--- ---@return boolean
--- --- Return if buffer <bufnr> exists
--- function Manager:buffer_is_valid(bufnr)
--- 	local ok, _ = pcall(self.get_buffer, self, bufnr)
--- 	return ok
--- end
 
 ---@param name string
 ---@return Inception.Workspace
@@ -390,27 +275,33 @@ end
 --- Create new <mode> and attach workspace <wsid>
 --- focus on workspace <wsid>
 function Manager:workspace_open(workspace, mode)
+	print("opening workspace " .. workspace.name)
 	local attachment_mode = mode or workspace.options.attachment_mode
 
 	if workspace.state ~= Workspace.STATE.active then
 		if workspace.state ~= Workspace.STATE.attached then
 			local target_id = nil
 			if attachment_mode == Workspace.ATTACHMENT_MODE.global then
-				if self.active_workspace then
+				if self.state.active_workspace then
+					print("creating new tab")
 					vim.cmd("tabnew")
 					target_id = vim.api.nvim_get_current_tabpage()
 				end
 			elseif attachment_mode == Workspace.ATTACHMENT_MODE.tab then
+				print("creating new tab")
 				vim.cmd("tabnew")
 				target_id = vim.api.nvim_get_current_tabpage()
 			elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
+				print("creating new window")
 				vim.cmd("new")
 				target_id = vim.api.nvim_get_current_win()
 			else
 				error("Invalid workspace attachment mode: " .. mode, vim.log.levels.ERROR)
 			end
 			self:workspace_attach(workspace, attachment_mode, target_id)
+			print("workspace " .. workspace.name .. " attached")
 		end
+		print("focusing on workspace " .. workspace.name)
 		self:focus_on_workspace(workspace)
 	end
 end
@@ -422,7 +313,7 @@ end
 function Manager:workspace_close(workspace)
 	local attachment_mode = workspace:attachment_mode()
 
-	if workspace.state == Workspace.STATE.active then
+	if self.state.active_workspace == workspace.id then
 		self:workspace_exit(workspace)
 	end
 
@@ -464,14 +355,17 @@ end
 --- Set workspace <wsid> to attachment to given target
 --- assign current active buffer(s) to workspace
 function Manager:workspace_attach(workspace, target_type, target_id)
+	print("attaching ws " .. workspace.name)
 	if workspace.state == Workspace.STATE.attached then
-		self:workspace_detach(workspace)
+		error("Workspace " .. workspace.name .. " already attached")
 	end
 
 	--- no explicit target_id used, just grab everything that isn't already attached to a workspace
 	if target_type == Workspace.ATTACHMENT_MODE.global and not target_id then
+		print("global mode, no target")
 		for id, tab in pairs(self.tabs) do
 			if #tab.workspaces == 0 then
+				print("attaching tab " .. tab.id .. " to workspace " .. workspace.name)
 				self:workspace_attach_component(workspace, tab)
 			end
 
@@ -479,6 +373,7 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 				local window = self:component_is_valid(winid, Component.Types.window)
 					and self:get_component(winid, Component.Types.window)
 				if window and #window.workspaces == 0 then
+					print("attaching window " .. window.id .. " to workspace " .. workspace.name)
 					self:workspace_attach_component(workspace, window)
 				end
 			end
@@ -487,15 +382,18 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 		for id, buffer in pairs(self.buffers) do
 			if #buffer.workspaces == 0 then
 				if self.options.buffer_capture_method == Manager.BufferCaptureMethod.listed then
+					print("attaching listed buffer " .. buffer.id .. " to workspace " .. workspace.name)
 					self:workspace_attach_component(workspace, buffer)
 				elseif
 					self.options.buffer_capture_method == Manager.BufferCaptureMethod.loaded
 					and vim.api.nvim_buf_is_loaded(id)
 				then
+					print("attaching loaded buffer " .. buffer.id .. " to workspace " .. workspace.name)
 					self:workspace_attach_component(workspace, buffer)
 				elseif self.options.buffer_capture_method == Manager.BufferCaptureMethod.active then
 					for winid in pairs(workspace.windows) do
 						if vim.api.nvim_win_get_buf(winid) == id then
+							print("attaching active buffer " .. buffer.id .. " to workspace " .. workspace.name)
 							self:workspace_attach_component(workspace, buffer)
 						end
 					end
@@ -506,6 +404,7 @@ function Manager:workspace_attach(workspace, target_type, target_id)
 	elseif
 		target_type == Workspace.ATTACHMENT_MODE.tab or (target_type == Workspace.ATTACHMENT_MODE.global and target_id)
 	then
+		print("global mode with target " .. target_id)
 		local tab = self:component_is_valid(target_id, Component.Types.tab)
 			and self:get_component(target_id, Component.Types.tab)
 		if tab then
@@ -587,6 +486,7 @@ end
 --- Mark workspace <wsid> as active workspace
 --- Activate workspace <wsid>
 function Manager:workspace_enter(workspace)
+	print("manager workspace enter: " .. workspace.name)
 	for _, component in ipairs(self:get_components()) do
 		if not vim.list_contains(workspace:get_components(component.type), component.id) then
 			component:set_invisible()
@@ -594,7 +494,7 @@ function Manager:workspace_enter(workspace)
 	end
 
 	workspace.state = Workspace.STATE.active
-	self.active_workspace = workspace.id
+	self.state.active_workspace = workspace.id
 	workspace:sync_cwd()
 end
 
@@ -602,12 +502,14 @@ end
 --- Mark active workspace as nil
 --- Deactivate workspace <wsid>
 function Manager:workspace_exit(workspace)
+	print("manager workspace exit: " .. workspace.name)
 	for _, component in ipairs(self:get_components()) do
 		component:set_visible()
 	end
 
 	workspace.state = Workspace.STATE.attached
-	self.active_workspace = nil
+	self.state.last_workspace = self.state.active_tab
+	self.state.active_workspace = nil
 end
 
 ---@param workspace Inception.Workspace
@@ -653,71 +555,12 @@ function Manager:workspace_attach_component(workspace, component)
 
 	table.insert(tbl, component.id)
 
-	if workspace.STATE.active then
+	if workspace.state == workspace.STATE.active then
 		component:set_visible()
 	else
 		component:set_visible()
 	end
 end
-
--- ---@param tabid number
--- ---@param wsid number
--- --- Attach tab <tabid> to workspace <wsid>
--- function Manager:workspace_tab_attach(tabid, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local tab = self:get_tab(tabid)
---
--- 	if vim.tbl_contains(workspace.tabs, tabid) then
--- 		return
--- 	end
---
--- 	local ok, ret = pcall(tab.workspace_attach, tab, wsid)
--- 	if not ok then
--- 		error(ret)
--- 	end
---
--- 	table.insert(workspace.tabs, tab.id)
--- end
---
--- ---@param winid number
--- ---@param wsid number
--- --- Attach window <winid> to workspace <wsid>
--- function Manager:workspace_window_attach(winid, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local window = self:get_window(winid)
---
--- 	if vim.tbl_contains(workspace.windows, winid) then
--- 		return
--- 	end
---
--- 	local ok, ret = pcall(window.workspace_attach, window, wsid)
--- 	if not ok then
--- 		error(ret)
--- 	end
---
--- 	table.insert(workspace.windows, window.id)
--- 	self.set_component_visibility(workspace, window)
--- end
---
--- ---@param bufnr number
--- ---@param wsid number
--- --- Attach buffer <bufnr> to workspace <wsid>
--- function Manager:workspace_buffer_attach(bufnr, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local buffer = self:get_buffer(bufnr)
---
--- 	if vim.tbl_contains(workspace.buffers, bufnr) then
--- 		return
--- 	end
---
--- 	local ok, ret = pcall(buffer.workspace_attach, buffer, wsid)
--- 	if not ok then
--- 		error(ret)
--- 	end
---
--- 	table.insert(workspace.buffers, buffer.id)
--- 	self.set_component_visibility(workspace, buffer)
--- end
 
 ---@param workspace Inception.Workspace
 ---@param component Inception.Component
@@ -752,73 +595,20 @@ function Manager:workspace_detach_component(workspace, component)
 	end
 
 	component:workspace_detach(workspace.id)
-	if not vim.list_contains(component.workspaces, self.active_workspace) then
+	if not vim.list_contains(component.workspaces, self.state.active_workspace) then
 		component:set_invisible()
 	end
 end
 
--- ---@param tabid number
--- ---@param wsid number
--- -- Detach tab <tabid> from workspace <wsid>
--- function Manager:workspace_tab_detach(tabid, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local tab = self:get_buffer(tabid)
---
--- 	for i, id in ipairs(workspace.tabs) do
--- 		if id == tab.id then
--- 			table.remove(workspace.tabs, i)
--- 			break
--- 		end
--- 	end
---
--- 	tab:workspace_detach(workspace.id)
--- 	self.set_component_visibility(workspace, tab)
--- end
---
--- ---@param winid number
--- ---@param wsid number
--- -- Detach window <winid> from workspace <wsid>
--- function Manager:workspace_window_detach(winid, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local window = self:get_window(winid)
---
--- 	for i, id in ipairs(workspace.windows) do
--- 		if id == window.id then
--- 			table.remove(workspace.windows, i)
--- 			break
--- 		end
--- 	end
---
--- 	window:workspace_detach(workspace.id)
--- 	self.set_component_visibility(workspace, Buffer)
--- end
---
--- ---@param bufnr number
--- ---@param wsid number
--- -- Detach buffer <bufnr> from workspace <wsid>
--- function Manager:workspace_buffer_detach(bufnr, wsid)
--- 	local workspace = self:get_workspace(wsid)
--- 	local buffer = self:get_buffer(bufnr)
---
--- 	for i, id in ipairs(workspace.buffers) do
--- 		if id == buffer.id then
--- 			table.remove(workspace.buffers, i)
--- 			break
--- 		end
--- 	end
---
--- 	buffer:workspace_detach(workspace.id)
--- 	self.set_component_visibility(workspace, buffer)
--- end
-
 ---@param args {tab: number}
 function Manager:handle_tabpage_new_event(args)
+	print("Tab new event: " .. args.tab)
 	local tabid = self:capture_component(args.tab, Component.Types.tab)
 	---TODO this fails because tab exit is performed first, meaning there is no active workspace at this point
-  if tabid and self.active_workspace then
-    print("trying to attach tab " .. tostring(self:get_component(tabid, Component.Types.tab).id) .. " to workspace " .. self:get_workspace(self.active_workspace).name )
+	if tabid and self.state.active_workspace then
+		print("new tab ws active: " .. self:get_workspace(self.state.active_workspace).name)
 		self:workspace_attach_component(
-			self:get_workspace(self.active_workspace),
+			self:get_workspace(self.state.active_workspace),
 			self:get_component(tabid, Component.Types.tab)
 		)
 	end
@@ -827,10 +617,12 @@ end
 ---@param args { tab: number }
 function Manager:handle_tabpage_enter_event(args)
 	--- if a workspace is attached to this tab, enter it.
+	print("Tab enter event: " .. args.tab)
+
 	for _, workspace in pairs(self.workspaces) do
 		if
 			workspace.state == Workspace.STATE.attached
-			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab)
+			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.tab)
 			and vim.list_contains(workspace.tabs, args.tab)
 		then
 			self:workspace_enter(workspace)
@@ -844,14 +636,18 @@ end
 
 ---@param args { tab: number }
 function Manager:handle_tabpage_leave_event(args)
-	if self.active_workspace then
-		local workspace = self:get_workspace(self.active_workspace)
+	print("Tab exit event: " .. args.tab)
+	self.state.last_tab = self.state.active_tab
+	self.state.active_tab = nil
+
+	if self.state.active_workspace then
+		local workspace = self:get_workspace(self.state.active_workspace)
 		if
 			workspace.state == Workspace.STATE.attached
-			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or Workspace.ATTACHMENT_MODE.tab)
+			and (workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.global or workspace:attachment_mode() == Workspace.ATTACHMENT_MODE.tab)
 			and vim.list_contains(workspace.tabs, args.tab)
 		then
-			self:workspace_exit(self:get_workspace(Manager.active_workspace))
+			self:workspace_exit(self:get_workspace(Manager.state.active_workspace))
 		end
 	end
 end
@@ -885,16 +681,39 @@ end
 
 ---@param args { win: number }
 function Manager:handle_win_new_event(args)
+	print("Window new event: " .. args.win)
 	local winid = self:capture_component(args.win, Component.Types.window)
 	local window = winid and self:get_component(winid, Component.Types.window)
 
-	if window and self.active_workspace then
-		self:workspace_attach_component(self:get_workspace(self.active_workspace), window)
+	if window and self.state.active_workspace then
+		self:workspace_attach_component(self:get_workspace(self.state.active_workspace), window)
 	end
 end
 
 ---@param args { win: number }
 function Manager:handle_win_enter_event(args)
+	print("Window enter event: " .. args.win)
+	self.state.active_window = args.win
+	self.state.active_tab = self.state.active_tab or vim.api.nvim_win_get_tabpage(args.win)
+
+	print("Last window: " .. tostring(self.state.last_window))
+	print("Active window: " .. tostring(self.state.active_window))
+	print("Last tab: " .. tostring(self.state.last_tab))
+	print("Active tab: " .. tostring(self.state.active_tab))
+	print("Window's tab: " .. vim.api.nvim_win_get_tabpage(args.win))
+
+	-- local last_tab = self.state.last_tab and self:get_component(self.state.last_tab, Component.Types.tab)
+	-- 	or { id = "nil" }
+	-- local active_tab = self.state.active_tab and self:get_component(self.state.active_tab, Component.Types.tab)
+	-- local last_window = self.state.last_window and self:get_component(self.state.last_window, Component.Types.window)
+	-- 	or { id = "nil" }
+	-- local active_window = self.state.active_window
+	-- 	and self:get_component(self.state.active_window, Component.Types.window)
+	--
+	-- print("tab: " .. last_tab.id .. " --> " .. active_tab.id)
+	-- print("window: " .. last_window.id .. " --> " .. active_window.id)
+	-- print("workspace: " .. tostring(last_window.workspaces[1]) .. " --> " .. tostring(active_window.workspaces[1]))
+
 	--- if a workspace is attached to this window, enter it.
 	if not self:component_is_valid(args.win, Component.Types.window) then
 		return
@@ -913,12 +732,16 @@ end
 
 ---@param args { win: number }
 function Manager:handle_win_leave_event(args)
+	print("Window exit event: " .. args.win)
+	self.state.last_window = self.state.active_window
+	self.state.active_window = nil
+
 	if not self:component_is_valid(args.win, Component.Types.window) then
 		return
 	end
 
-	if self.active_workspace then
-		local workspace = self:get_workspace(self.active_workspace)
+	if self.state.active_workspace then
+		local workspace = self:get_workspace(self.state.active_workspace)
 		if vim.tbl_contains(workspace.windows, args.win) then
 			self:workspace_exit(workspace)
 		end
@@ -952,8 +775,8 @@ function Manager:handle_new_buffer_event(args)
 	local bufid = self:capture_component(args.buf, Component.Types.buffer)
 	local buffer = bufid and self:get_component(bufid, Component.Types.buffer)
 
-	if buffer and self.active_workspace then
-		self:workspace_attach_component(self:get_workspace(self.active_workspace), buffer)
+	if buffer and self.state.active_workspace then
+		self:workspace_attach_component(self:get_workspace(self.state.active_workspace), buffer)
 	end
 end
 
