@@ -1,13 +1,13 @@
 --- TODO: build test for closing non-active workspace to test going back to original tab
 --- TODO: rebuild test for attaching unattached buffer
 
-local create_tests = false
-local rename_tests = false
+local create_tests = true
+local rename_tests = true
 local open_tests = true
-local close_tests = false
-local attach_tests = false
-local focus_tests = false
-local detach_tests = false
+local close_tests = true
+local attach_tests = true
+local focus_tests = true
+local detach_tests = true
 
 require("inception.init").setup()
 
@@ -62,6 +62,7 @@ if create_tests then
 			assert.are.same({
 				id = 1,
 				name = name,
+				session = {},
 				state = Workspace.STATE.loaded,
 				options = ws_default_opts,
 				current_working_directory = Utils.normalize_file_path(current_dir),
@@ -76,6 +77,7 @@ if create_tests then
 			assert.are.same({
 				id = 1,
 				name = name,
+				session = {},
 				state = Workspace.STATE.loaded,
 				options = ws_default_opts,
 				current_working_directory = Utils.normalize_file_path("~"),
@@ -92,6 +94,7 @@ if create_tests then
 			assert.are.same({
 				id = 1,
 				name = name,
+				session = {},
 				state = Workspace.STATE.loaded,
 				options = custom_opts,
 				current_working_directory = Utils.normalize_file_path(current_dir),
@@ -327,10 +330,18 @@ if open_tests then
 			assert.is_not_true(vim.tbl_contains(tabworkspace.buffers, external_buf))
 		end)
 
+		Manager:workspace_exit(tabworkspace)
 		--- global -------------------------------------------
 
 		vim.cmd("tabnew")
 		local external_tab = vim.api.nvim_get_current_tabpage()
+		local free_tabs = {}
+		for _, tab in pairs(Manager.tabs) do
+			if #tab.workspaces == 0 then
+				table.insert(free_tabs, tab.id)
+			end
+		end
+
 		it("global should open workspace without errors", function()
 			assert.has_no.errors(function()
 				Manager:workspace_open(globalworkspace, Workspace.ATTACHMENT_MODE.global)
@@ -350,7 +361,7 @@ if open_tests then
 		end)
 
 		it("global workspace should have captured all free tabs", function()
-			assert.are.same({ vim.api.nvim_get_current_tabpage(), external_tab }, globalworkspace.tabs)
+			assert.are.same(free_tabs, globalworkspace.tabs)
 		end)
 
 		it("global workspace did not capture out of scope tabs", function()
