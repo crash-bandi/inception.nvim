@@ -2,7 +2,7 @@
 ---@field type Inception.Component.Type
 ---@field id number
 ---@field workspaces number[]
----@field visible boolean
+---@field active boolean
 local Component = {}
 Component.__index = Component
 Component._new = {}
@@ -24,7 +24,7 @@ function Component:new(id)
 	local component = setmetatable(vim.deepcopy(Component._new), self)
 
 	component.id = id
-	component.visible = true
+	component.active = true
 	component.workspaces = {}
 
 	return component
@@ -40,18 +40,18 @@ function Component:is_valid()
 	error("method not implemented")
 end
 
-function Component:set_visible()
-	self:_set_visible_action()
-	self.visible = true
+function Component:set_active()
+	self:_set_active_action()
+	self.active = true
 end
 
-function Component:set_invisible()
-	self:_set_invisible_action()
-	self.visible = false
+function Component:set_inactive()
+	self:_set_inactive_action()
+	self.active = false
 end
 
-function Component:_set_visible_action() end
-function Component:_set_invisible_action() end
+function Component:_set_active_action() end
+function Component:_set_inactive_action() end
 
 ---@param wsid number
 function Component:workspace_attach(wsid)
@@ -120,11 +120,11 @@ function Buffer._validate_new(bufnr)
 	return vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_get_option_value("buflisted", { buf = bufnr }) == true
 end
 
-function Buffer:_set_visible_action()
+function Buffer:_set_active_action()
 	vim.api.nvim_set_option_value("buflisted", true, { buf = self.id })
 end
 
-function Buffer:_set_invisible_action()
+function Buffer:_set_inactive_action()
 	vim.api.nvim_set_option_value("buflisted", false, { buf = self.id })
 end
 

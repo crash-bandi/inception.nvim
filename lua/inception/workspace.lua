@@ -54,8 +54,8 @@ Workspace.ATTACHMENT_MODE = {
 }
 
 Workspace._new = {
-  state = nil,
-  session = {},
+	state = nil,
+	session = {},
 	root_dirs = {},
 	tabs = {},
 	windows = {},
@@ -96,17 +96,17 @@ function Workspace.new(config)
 end
 
 function Workspace:enter()
-  self.session.active_tab = vim.api.nvim_get_current_tabpage()
-  self.session.active_window = vim.api.nvim_get_current_win()
+	self.session.active_tab = vim.api.nvim_get_current_tabpage()
+	self.session.active_window = vim.api.nvim_get_current_win()
 end
 
 ---@param previous_tab number
 ---@param previous_window number
 function Workspace:exit(previous_tab, previous_window)
-  self.session.previous_tab = previous_tab
-  self.session.active_tab = nil
-  self.session.previous_window = previous_window
-  self.session.active_window = nil
+	self.session.previous_tab = previous_tab
+	self.session.active_tab = nil
+	self.session.previous_window = previous_window
+	self.session.active_window = nil
 end
 
 ---@return Inception.Workspace.AttachmentMode | nil
@@ -118,7 +118,7 @@ function Workspace:attachment_mode()
 	elseif #self.windows > 0 then
 		return Workspace.ATTACHMENT_MODE.window
 	else
-		error("Internal error - not attachment mode")
+		error("Internal error - no attachment mode")
 	end
 end
 
@@ -204,6 +204,8 @@ function Workspace:sync_cwd()
 end
 
 function Workspace:desync_cwd()
+	Utils.ignore_enter_exit_events()
+
 	local root_cwd = vim.fn.getcwd(-1, -1)
 	local original_tab = vim.api.nvim_get_current_tabpage()
 
@@ -220,6 +222,8 @@ function Workspace:desync_cwd()
 	if vim.api.nvim_get_current_tabpage() ~= original_tab then
 		vim.api.nvim_set_current_tabpage(original_tab)
 	end
+
+	Utils.reset_enter_exit_events()
 end
 
 function Workspace:update_multi_root_flag()

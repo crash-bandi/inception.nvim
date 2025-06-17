@@ -645,7 +645,6 @@ if focus_tests then
 		end)
 
 		vim.cmd("tabprev")
-
 		it("workspace state should be 'attached'", function()
 			assert.are.same(Workspace.STATE.attached, workspace.state)
 		end)
@@ -653,7 +652,7 @@ if focus_tests then
 end
 
 ---
---- focus tests ------------------------------------------------------------------
+--- detach tests ------------------------------------------------------------------
 ---
 
 if detach_tests then

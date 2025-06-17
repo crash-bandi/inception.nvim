@@ -38,7 +38,7 @@ function M.setup(config)
 		desc = "Inception commands",
 	})
 
-  print("inception setup complete")
+	print("inception setup complete")
 end
 
 return M
