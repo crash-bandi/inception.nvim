@@ -26,7 +26,7 @@ describe("api.open_workspace:", function()
 
 	it("Workspace should be Manager's active workspace", function()
 		local workspace = Manager:get_workspace_by_name("test1")
-		assert.is.same(Manager.active_workspace, workspace.id)
+		assert.is.same(Manager.session.active_workspace, workspace.id)
 	end)
 end)
 
@@ -35,7 +35,6 @@ describe("api.set_workspace: ", function()
 	Api.create_new_workspace("test3")
 	Api.open_workspace(2)
 	vim.cmd("tabnext")
-
 	it("Should move to previous workspace without errors", function()
 		assert.has_no_errors(function()
 			Api.set_workspace_prev()

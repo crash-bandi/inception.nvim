@@ -35,8 +35,8 @@ end
 ---@return number | nil wsid workspace id
 function api.get_workspace(name)
 	if not name then
-		if Manager.state.active_workspace then
-			return Manager.state.active_workspace
+		if Manager.session.active_workspace then
+			return Manager.session.active_workspace
 		end
 		vim.notify("No workspace name provided.")
 		return
@@ -55,7 +55,8 @@ end
 function api.open_workspace(wsid, mode)
 	local get_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
 	if get_workspace then
-		local open_workspace, ret = pcall(Manager.workspace_open, Manager, workspace, Workspace.ATTACHMENT_MODE[mode])
+		local attachment_mode = mode and Workspace.ATTACHMENT_MODE[mode] or nil
+		local open_workspace, ret = pcall(Manager.workspace_open, Manager, workspace, attachment_mode)
 		if not open_workspace then
 			vim.notify(ret, vim.log.levels.ERROR)
 		end
@@ -66,17 +67,17 @@ end
 
 ---@param wsid? number
 function api.close_workspace(wsid)
-	wsid = wsid or Manager.state.active_workspace or nil
+	wsid = wsid or Manager.session.active_workspace or nil
 
 	if not wsid then
 		vim.notify("No workspace id provided.")
 		return
 	end
 
-  local got_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
-  if not got_workspace then
-    vim.notify("Workspace " .. wsid .. " does not exist")
-  end
+	local got_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
+	if not got_workspace then
+		vim.notify("Workspace " .. wsid .. " does not exist")
+	end
 
 	local ok, ret = pcall(Manager.workspace_close, Manager, workspace)
 
@@ -124,7 +125,7 @@ end
 
 ---@param wsid? number workspace id
 function api.detach_workspace(wsid)
-	wsid = wsid or Manager.state.active_workspace
+	wsid = wsid or Manager.session.active_workspace
 
 	if not wsid then
 		vim.notify("No workspace id provided.")
@@ -158,6 +159,7 @@ function api.set_workspace(wsid)
 	local ok2, err = pcall(Manager.focus_on_workspace, Manager, workspace)
 
 	if not ok2 then
+		error(err)
 		vim.notify(err, vim.log.levels.ERROR)
 	end
 end
@@ -176,12 +178,15 @@ end
 
 function api.set_workspace_prev()
 	if #Manager.attached_workspaces > 0 then
-		if not Manager.state.active_workspace then
+		if not Manager.session.active_workspace then
 			api.set_workspace_last()
 			return
 		end
 
-		local current_index = vim.fn.indexof(Manager.attached_workspaces, "v:val == " .. Manager.state.active_workspace) + 1
+		local current_index = vim.fn.indexof(
+			Manager.attached_workspaces,
+			"v:val == " .. Manager.session.active_workspace
+		) + 1
 		local prev_index = current_index - 1
 		if prev_index < 1 then
 			prev_index = #Manager.attached_workspaces -- wrap around
@@ -193,16 +198,22 @@ end
 
 function api.set_workspace_next()
 	if #Manager.attached_workspaces > 0 then
-		if not Manager.state.active_workspace then
+		if not Manager.session.active_workspace then
 			api.set_workspace_first()
 			return
 		end
 
-		local current_index = vim.fn.indexof(Manager.attached_workspaces, "v:val == " .. Manager.state.active_workspace) + 1
+		local current_index = vim.fn.indexof(
+			Manager.attached_workspaces,
+			"v:val == " .. Manager.session.active_workspace
+		) + 1
 		local next_index = current_index + 1
 		if next_index > #Manager.attached_workspaces then
 			next_index = 1 -- wrap around
 		end
+
+		print("current index: " .. current_index)
+		print("Next index: " .. next_index)
 
 		api.set_workspace(Manager.attached_workspaces[next_index])
 	end
