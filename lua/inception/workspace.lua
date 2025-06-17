@@ -6,6 +6,7 @@ local Utils = require("inception.utils")
 ---@field id number unique id
 ---@field name string unique name
 ---@field state Inception.Workspace.State
+---@field session Inception.Workspace.Session
 ---@field root_dirs Inception.Workspace.RootDir[]
 ---@field tabs number[]
 ---@field windows number[]
@@ -15,6 +16,12 @@ local Utils = require("inception.utils")
 ---@field options Inception.Workspace.Options
 local Workspace = {}
 Workspace.__index = Workspace
+
+---@class Inception.Workspace.Session
+---@field previous_tab number
+---@field previous_window number
+---@field active_tab number
+---@field active_window number
 
 ---@class Inception.Workspace.RootDir
 ---@field raw string user provided
@@ -47,6 +54,8 @@ Workspace.ATTACHMENT_MODE = {
 }
 
 Workspace._new = {
+  state = nil,
+  session = {},
 	root_dirs = {},
 	tabs = {},
 	windows = {},
@@ -84,6 +93,20 @@ function Workspace.new(config)
 	workspace.state = Workspace.STATE.loaded
 
 	return workspace
+end
+
+function Workspace:enter()
+  self.session.active_tab = vim.api.nvim_get_current_tabpage()
+  self.session.active_window = vim.api.nvim_get_current_win()
+end
+
+---@param previous_tab number
+---@param previous_window number
+function Workspace:exit(previous_tab, previous_window)
+  self.session.previous_tab = previous_tab
+  self.session.active_tab = nil
+  self.session.previous_window = previous_window
+  self.session.active_window = nil
 end
 
 ---@return Inception.Workspace.AttachmentMode | nil

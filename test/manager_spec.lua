@@ -207,7 +207,7 @@ if open_tests then
 		end)
 
 		it("win workspace should be manager's active workspace", function()
-			assert.are.same(Manager.state.active_workspace, winworkspace.id)
+			assert.are.same(Manager.session.active_workspace, winworkspace.id)
 		end)
 
 		it("win workspace state should be active", function()
@@ -249,7 +249,7 @@ if open_tests then
 		end)
 
 		it("tab workspace should be manager's active workspace", function()
-			assert.are.same(Manager.state.active_workspace, tabworkspace.id)
+			assert.are.same(Manager.session.active_workspace, tabworkspace.id)
 		end)
 
 		it("tab workspace state should be active", function()
@@ -342,7 +342,7 @@ if open_tests then
 		end)
 
 		it("global workspace should be manager's active workspace", function()
-			assert.are.same(Manager.state.active_workspace, globalworkspace.id)
+			assert.are.same(Manager.session.active_workspace, globalworkspace.id)
 		end)
 
 		it("global workspace state should be active", function()
@@ -383,9 +383,7 @@ if open_tests then
 		end)
 
 		it("global workspace should capture new tab", function()
-      print("ws active: " .. Manager:get_workspace(Manager.state.active_workspace).name)
 			vim.cmd("tabnew")
-      print("ws active" .. Manager:get_workspace(Manager.state.active_workspace).name)
 			assert.is_true(vim.list_contains(globalworkspace.tabs, vim.api.nvim_get_current_tabpage()))
 		end)
 
@@ -447,7 +445,7 @@ if close_tests and open_tests then
 		end)
 
 		it("win workspace should not be manager's active workspace", function()
-			assert.are_not.same(Manager.state.active_workspace, winworkspace.id)
+			assert.are_not.same(Manager.session.active_workspace, winworkspace.id)
 		end)
 		it("win workspace should have closed attached window", function()
 			assert.is_not_true(vim.tbl_contains(vim.api.nvim_list_wins(), winworkspace_cur_winid))
@@ -482,7 +480,7 @@ if close_tests and open_tests then
 		end)
 
 		it("tab workspace should not be manager's active workspace", function()
-			assert.are_not.same(Manager.state.active_workspace, tabworkspace.id)
+			assert.are_not.same(Manager.session.active_workspace, tabworkspace.id)
 		end)
 
 		it("tab workspace should have closed attached tab", function()
@@ -520,7 +518,7 @@ if close_tests and open_tests then
 		end)
 
 		it("global workspace should not be manager's active workspace", function()
-			assert.are_not.same(Manager.state.active_workspace, globalworkspace.id)
+			assert.are_not.same(Manager.session.active_workspace, globalworkspace.id)
 		end)
 
 		it("global workspace should have closed attached tabs", function()
@@ -584,7 +582,7 @@ if attach_tests then
 		end)
 
 		it("manager active workspace should be nil", function()
-			assert.are.same(nil, Manager.state.active_workspace)
+			assert.are.same(nil, Manager.session.active_workspace)
 		end)
 	end)
 
@@ -609,7 +607,7 @@ if attach_tests then
 		end)
 
 		it("manager active workspace should be nil", function()
-			assert.are.same(nil, Manager.state.active_workspace)
+			assert.are.same(nil, Manager.session.active_workspace)
 		end)
 	end)
 end
@@ -632,7 +630,7 @@ if focus_tests then
 		end)
 
 		it("manager active workspace should be workspace", function()
-			assert.are.same(Manager.state.active_workspace, workspace.id)
+			assert.are.same(Manager.session.active_workspace, workspace.id)
 		end)
 
 		vim.cmd("tabprev")
@@ -669,7 +667,7 @@ if detach_tests then
 		end)
 
 		it("workspace should not be manager active workspace", function()
-			assert.is_true(Manager.state.active_workspace ~= workspace.id)
+			assert.is_true(Manager.session.active_workspace ~= workspace.id)
 		end)
 	end)
 
@@ -694,7 +692,7 @@ if detach_tests then
 		end)
 
 		it("workspace should not be manager active workspace", function()
-			assert.is_true(Manager.state.active_workspace ~= workspace.id)
+			assert.is_true(Manager.session.active_workspace ~= workspace.id)
 		end)
 	end)
 
