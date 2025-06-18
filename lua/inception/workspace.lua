@@ -96,6 +96,8 @@ function Workspace.new(config)
 end
 
 function Workspace:enter()
+	--print("setting workspace " .. self.name .. " current tab to " .. vim.api.nvim_get_current_tabpage())
+	--print("setting workspace " .. self.name .. " current window to " .. vim.api.nvim_get_current_win())
 	self.session.active_tab = vim.api.nvim_get_current_tabpage()
 	self.session.active_window = vim.api.nvim_get_current_win()
 end
@@ -103,6 +105,8 @@ end
 ---@param previous_tab number
 ---@param previous_window number
 function Workspace:exit(previous_tab, previous_window)
+	--print("setting workspace " .. self.name .. " previous tab to " .. tostring(previous_tab))
+	--print("setting workspace " .. self.name .. " previous window to " .. tostring(previous_window))
 	self.session.previous_tab = previous_tab
 	self.session.active_tab = nil
 	self.session.previous_window = previous_window

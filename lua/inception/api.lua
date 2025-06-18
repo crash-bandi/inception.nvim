@@ -141,9 +141,9 @@ end
 
 ---@param wsid number
 function api.set_workspace(wsid)
-	local ok, workspace = pcall(Manager.get_workspace, Manager, wsid)
+	local get_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
 
-	if not ok then
+	if not get_workspace then
 		vim.notify(workspace, vim.log.levels.ERROR)
 		return
 	end
@@ -156,9 +156,9 @@ function api.set_workspace(wsid)
 		return
 	end
 
-	local ok2, err = pcall(Manager.focus_on_workspace, Manager, workspace)
+	local focus_workspace, err = pcall(Manager.focus_on_workspace, Manager, workspace)
 
-	if not ok2 then
+	if not focus_workspace then
 		error(err)
 		vim.notify(err, vim.log.levels.ERROR)
 	end
