@@ -3,11 +3,11 @@ local M = {}
 function M.active_workspace_cwd()
 	local manager = require("inception.manager")
 
-	if not manager.active_workspace then
+	if not manager.session.active_workspace then
 		return "No workspace"
 	end
 
-	local cwd = manager:get_workspace(manager.active_workspace).current_working_directory.absolute
+	local cwd = manager:get_workspace(manager.session.active_workspace).current_working_directory.absolute
 
 	-- return "lualine_a_normal " .. cwd
 	return cwd
@@ -48,7 +48,7 @@ function M.attached_workspaces()
 	for idx, wsid in ipairs(manager.attached_workspaces) do
 		local workspace = manager:get_workspace(wsid)
 
-		local hl = wsid == manager.active_workspace and active_hl or deselected_hl
+		local hl = wsid == manager.session.active_workspace and active_hl or deselected_hl
 		local workspace_str = string.format("%s%%%dT %s %%T", hl, idx, workspace.name)
 		table.insert(tabline_items, workspace_str)
 	end

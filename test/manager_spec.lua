@@ -334,7 +334,6 @@ if open_tests then
 		--- global -------------------------------------------
 
 		vim.cmd("tabnew")
-		local external_tab = vim.api.nvim_get_current_tabpage()
 		local free_tabs = {}
 		for _, tab in pairs(Manager.tabs) do
 			if #tab.workspaces == 0 then
@@ -408,27 +407,27 @@ if open_tests then
 			)
 		end)
 
-		-- it("global workspace should stay active on tab change", function()
-		-- 	vim.api.nvim_set_current_tabpage(globalworkspace.tabs[2])
-		-- 	assert.is.same(manager.state.active_workspace, globalworkspace.id)
-		-- end)
-		--
-		-- local current_tab_id = vim.api.nvim_get_current_tabpage()
-		-- local current_win_id = vim.api.nvim_get_current_win()
-		-- local current_buf_id = vim.api.nvim_get_current_buf()
-		--
-		-- it("global workspace should detach tab on delete", function()
-		-- 	vim.cmd("tabclose")
-		-- 	assert.is_not_true(vim.list_contains(globalworkspace.tabs, current_tab_id))
-		-- end)
-		--
-		-- it("global workpsace should detach window on delete", function()
-		-- 	assert.is_not_true(vim.list_contains(globalworkspace.windows, current_win_id))
-		-- end)
-		--
-		-- it("global workspace should not detach buffer on window delete", function()
-		-- 	assert.is_true(vim.list_contains(globalworkspace.buffers, current_buf_id))
-		-- end)
+		it("global workspace should stay active on tab change", function()
+			vim.api.nvim_set_current_tabpage(globalworkspace.tabs[2])
+			assert.is.same(Manager.session.active_workspace, globalworkspace.id)
+		end)
+
+		local current_tab_id = vim.api.nvim_get_current_tabpage()
+		local current_win_id = vim.api.nvim_get_current_win()
+		local current_buf_id = vim.api.nvim_get_current_buf()
+
+		it("global workspace should detach tab on delete", function()
+			vim.cmd("tabclose")
+			assert.is_not_true(vim.list_contains(globalworkspace.tabs, current_tab_id))
+		end)
+
+		it("global workpsace should detach window on delete", function()
+			assert.is_not_true(vim.list_contains(globalworkspace.windows, current_win_id))
+		end)
+
+		it("global workspace should not detach buffer on window delete", function()
+			assert.is_true(vim.list_contains(globalworkspace.buffers, current_buf_id))
+		end)
 	end)
 end
 
@@ -554,6 +553,25 @@ if close_tests and open_tests then
 		it("global workspace should have left all existing buffers intact", function()
 			assert.are.same(current_bufs, vim.api.nvim_list_bufs())
 		end)
+
+		print("====================== more workspaces =======================")
+		local workspace1 = Manager:workspace_create("tabtest100", "~")
+		-- local workspace2 = Manager:workspace_create("tabtest101", "~/git")
+		Manager:workspace_open(workspace1, Workspace.ATTACHMENT_MODE.tab)
+		vim.cmd("new")
+		vim.cmd("new")
+		-- Manager:workspace_open(workspace2, Workspace.ATTACHMENT_MODE.tab)
+		-- vim.cmd("new")
+		-- vim.cmd("new")
+
+		-- vim.api.nvim_set_current_tabpage(workspace1.tabs[1])
+		it("workspace should detach what last tab is closed", function()
+			assert.has_no.errors(function()
+				vim.cmd("tabclose")
+			end)
+		end)
+		-- Manager:workspace_close(workspace2)
+		print("====================== more workspaces done =======================")
 	end)
 
 	describe("test env cleanup", function()

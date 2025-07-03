@@ -212,9 +212,6 @@ function api.set_workspace_next()
 			next_index = 1 -- wrap around
 		end
 
-		print("current index: " .. current_index)
-		print("Next index: " .. next_index)
-
 		api.set_workspace(Manager.attached_workspaces[next_index])
 	end
 end
