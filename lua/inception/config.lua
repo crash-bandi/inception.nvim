@@ -21,7 +21,7 @@ local Config = {
 ---@class Inception.User.Config.Options
 ---@field exit_on_last_tab_close? boolean
 
----@param config Inception.User.Config
+---@param config? Inception.User.Config
 function Config.load(config)
 	config = config or {}
 

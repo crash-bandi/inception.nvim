@@ -29,8 +29,16 @@ vim.api.nvim_create_autocmd("TabLeave", {
 vim.api.nvim_create_autocmd("TabClosed", {
 	group = "InceptionEvents",
 	callback = function()
-		--- no way to get closed tabid
-		Manager:handle_tabpage_closed_event()
+		--- get manager tabid that isn't in nvim_list_tabpages
+		local tabid = vim.tbl_filter(function(i)
+			return not vim.tbl_contains(vim.api.nvim_list_tabpages(), i)
+		end, vim.tbl_keys(Manager.tabs))
+
+		if #tabid > 1 then
+			error("Internal error - invalid tab components greater than 1.")
+		end
+
+		Manager:handle_tabpage_closed_event({ tab = tabid[1] })
 	end,
 })
 

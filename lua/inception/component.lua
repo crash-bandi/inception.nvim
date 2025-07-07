@@ -98,6 +98,13 @@ Window.__index = Window
 Window.type = Component.TYPE.window
 
 function Window._validate_new(winid)
+	local exclude_buf_file_types = { "NvimTree" }
+	local bufid = vim.api.nvim_win_get_buf(winid)
+
+	if vim.list_contains(exclude_buf_file_types, vim.api.nvim_get_option_value("filetype", { buf = bufid })) then
+    return false
+	end
+
 	return vim.api.nvim_win_is_valid(winid)
 end
 

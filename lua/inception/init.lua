@@ -1,4 +1,4 @@
-local Config = require("inception.Config")
+local Config = require("inception.config")
 
 local M = {}
 

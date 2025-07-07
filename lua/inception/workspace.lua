@@ -96,8 +96,8 @@ function Workspace.new(config)
 end
 
 function Workspace:enter()
-	--print("setting workspace " .. self.name .. " current tab to " .. vim.api.nvim_get_current_tabpage())
-	--print("setting workspace " .. self.name .. " current window to " .. vim.api.nvim_get_current_win())
+	-----print("setting workspace " .. self.name .. " current tab to " .. vim.api.nvim_get_current_tabpage())
+	-----print("setting workspace " .. self.name .. " current window to " .. vim.api.nvim_get_current_win())
 	self.session.active_tab = vim.api.nvim_get_current_tabpage()
 	self.session.active_window = vim.api.nvim_get_current_win()
 end
@@ -105,8 +105,8 @@ end
 ---@param previous_tab number
 ---@param previous_window number
 function Workspace:exit(previous_tab, previous_window)
-	--print("setting workspace " .. self.name .. " previous tab to " .. tostring(previous_tab))
-	--print("setting workspace " .. self.name .. " previous window to " .. tostring(previous_window))
+	-----print("setting workspace " .. self.name .. " previous tab to " .. tostring(previous_tab))
+	-----print("setting workspace " .. self.name .. " previous window to " .. tostring(previous_window))
 	self.session.previous_tab = previous_tab
 	self.session.active_tab = nil
 	self.session.previous_window = previous_window
@@ -208,19 +208,27 @@ function Workspace:sync_cwd()
 end
 
 function Workspace:desync_cwd()
+	---print("start desync")
 	Utils.ignore_enter_exit_events()
 
 	local root_cwd = vim.fn.getcwd(-1, -1)
 	local original_tab = vim.api.nvim_get_current_tabpage()
 
+	---print("desync tabs")
 	for _, tabid in ipairs(self.tabs) do
-		vim.api.nvim_set_current_tabpage(tabid)
-		vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
+		if vim.api.nvim_tabpage_is_valid(tabid) then
+			vim.api.nvim_set_current_tabpage(tabid)
+			vim.cmd("tcd " .. vim.fn.getcwd(-1, -1))
+		end
 	end
+
+	---print("desync windows")
 	for _, winid in ipairs(self.windows) do
-		vim.api.nvim_win_call(winid, function()
-			vim.fn.chdir(root_cwd)
-		end)
+		if vim.api.nvim_win_is_valid(winid) then
+			vim.api.nvim_win_call(winid, function()
+				vim.fn.chdir(root_cwd)
+			end)
+		end
 	end
 
 	if vim.api.nvim_get_current_tabpage() ~= original_tab then
@@ -228,6 +236,7 @@ function Workspace:desync_cwd()
 	end
 
 	Utils.reset_enter_exit_events()
+	---print("end desync")
 end
 
 function Workspace:update_multi_root_flag()
