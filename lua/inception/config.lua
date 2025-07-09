@@ -6,12 +6,17 @@
 
 ---@class Inception.config
 ---@field options Inception.Config.Options
+---@field log Inception.Log.Options
 local Config = {
 	options = {
 		exit_on_last_tab_close = false,
 		log_action = "print",
 		default_attachment_mode = "global",
 		buffer_capture_method = "loaded",
+	},
+	log = {
+		level = "INFO",
+		output = "notify",
 	},
 }
 
@@ -26,6 +31,9 @@ function Config.load(config)
 	config = config or {}
 
 	Config.options = vim.tbl_deep_extend("force", Config.options, config.options or {})
+
+	Config.log.level = vim.fn.toupper(Config.log.level)
+  Config.log.output = vim.fn.tolower(Config.log.output)
 end
 
 return Config

@@ -1,3 +1,5 @@
+local log = require("inception.log").Logger
+
 local Component = require("inception.component")
 local Config = require("inception.config")
 local Utils = require("inception.utils")
@@ -96,8 +98,8 @@ function Workspace.new(config)
 end
 
 function Workspace:enter()
-	-----print("setting workspace " .. self.name .. " current tab to " .. vim.api.nvim_get_current_tabpage())
-	-----print("setting workspace " .. self.name .. " current window to " .. vim.api.nvim_get_current_win())
+	log.debug("setting workspace " .. self.name .. " current tab to " .. vim.api.nvim_get_current_tabpage())
+	log.debug("setting workspace " .. self.name .. " current window to " .. vim.api.nvim_get_current_win())
 	self.session.active_tab = vim.api.nvim_get_current_tabpage()
 	self.session.active_window = vim.api.nvim_get_current_win()
 end
@@ -105,8 +107,8 @@ end
 ---@param previous_tab number
 ---@param previous_window number
 function Workspace:exit(previous_tab, previous_window)
-	-----print("setting workspace " .. self.name .. " previous tab to " .. tostring(previous_tab))
-	-----print("setting workspace " .. self.name .. " previous window to " .. tostring(previous_window))
+	log.debug("setting workspace " .. self.name .. " previous tab to " .. tostring(previous_tab))
+	log.debug("setting workspace " .. self.name .. " previous window to " .. tostring(previous_window))
 	self.session.previous_tab = previous_tab
 	self.session.active_tab = nil
 	self.session.previous_window = previous_window
@@ -208,13 +210,13 @@ function Workspace:sync_cwd()
 end
 
 function Workspace:desync_cwd()
-	---print("start desync")
+	log.debug("start desync")
 	Utils.ignore_enter_exit_events()
 
 	local root_cwd = vim.fn.getcwd(-1, -1)
 	local original_tab = vim.api.nvim_get_current_tabpage()
 
-	---print("desync tabs")
+	log.debug("desync tabs")
 	for _, tabid in ipairs(self.tabs) do
 		if vim.api.nvim_tabpage_is_valid(tabid) then
 			vim.api.nvim_set_current_tabpage(tabid)
@@ -222,7 +224,7 @@ function Workspace:desync_cwd()
 		end
 	end
 
-	---print("desync windows")
+	log.debug("desync windows")
 	for _, winid in ipairs(self.windows) do
 		if vim.api.nvim_win_is_valid(winid) then
 			vim.api.nvim_win_call(winid, function()
@@ -236,7 +238,7 @@ function Workspace:desync_cwd()
 	end
 
 	Utils.reset_enter_exit_events()
-	---print("end desync")
+	log.debug("end desync")
 end
 
 function Workspace:update_multi_root_flag()

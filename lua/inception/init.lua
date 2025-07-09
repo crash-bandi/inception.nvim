@@ -6,6 +6,8 @@ local M = {}
 function M.setup(config)
 	Config.load(config)
 
+  local log = require("inception.log").Logger
+
 	--- load events
 	require("inception.events")
 
@@ -21,8 +23,7 @@ function M.setup(config)
 		if subcommand == "open_workspace" then
 			require("inception.ui").open_workspace()
 		else
-			print("Unknown subcommand: " .. (subcommand or "nil"))
-		end
+			log.warn("Unknown subcommand: " .. (subcommand or "nil"))		end
 	end, {
 		nargs = "*",
 		complete = function(arg_lead, cmd_line, cursor_pos)
@@ -37,6 +38,8 @@ function M.setup(config)
 		end,
 		desc = "Inception commands",
 	})
+
+  log.info("Inception setup complete")
 end
 
 return M
