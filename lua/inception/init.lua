@@ -7,12 +7,11 @@ function M.setup(config)
 	Config.load(config)
 
   local log = require("inception.log").Logger
-
 	--- load events
 	require("inception.events")
 
 	--- load commands
-	vim.keymap.set("n", "<leader>iwl", require("inception.ui").open_workspace)
+	vim.keymap.set("n", "<leader>iwl", require("inception.ui").list_workspaces)
 	vim.keymap.set("n", "<C-S-Right>", require("inception.api").set_workspace_next)
 	vim.keymap.set("n", "<C-S-Left>", require("inception.api").set_workspace_prev)
 
@@ -20,8 +19,8 @@ function M.setup(config)
 		local args = vim.split(opts.args, " ")
 		local subcommand = args[1]
 
-		if subcommand == "open_workspace" then
-			require("inception.ui").open_workspace()
+		if subcommand == "list_workspaces" then
+			require("inception.ui").list_workspaces()
 		else
 			log.warn("Unknown subcommand: " .. (subcommand or "nil"))		end
 	end, {
@@ -39,7 +38,7 @@ function M.setup(config)
 		desc = "Inception commands",
 	})
 
-  log.info("Inception setup complete")
+  log.debug("Inception setup complete")
 end
 
 return M

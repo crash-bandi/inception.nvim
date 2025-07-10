@@ -1,5 +1,7 @@
-local Manager = require("inception.manager")
+local log = require("inception.log").Logger
 local Api = require("inception.api")
+local Manager = require("inception.manager")
+local Workspace = require("inception.workspace")
 
 ---@class Inception.PickerOptions
 ---@field finder any[] | fun():any[]
@@ -37,16 +39,25 @@ function UI:render()
 end
 
 ---@param options? Inception.PickerOptions
-UI.open_workspace = function(options)
+UI.list_workspaces = function(options)
 	if #Manager.workspaces == 0 then
-		vim.notify("No workspaces loaded", vim.log.levels.INFO)
+		log.info("No workspaces loaded")
 		return
 	end
 
-	local options = {
+	local opts = {
 		finder = Manager.workspaces,
 		formatter = function(item)
-			return string.format("%-20s %s", item.name, item.id)
+      local state = nil
+      if item.state == Workspace.STATE.active then
+        state = ""
+      elseif item.state == Workspace.STATE.attached then
+        state = ""
+      elseif item.state == Workspace.STATE.loaded then
+        state = "󱥸"
+      end
+
+			return string.format("%s %-20s %s", state, item.name, item.id)
 		end,
 		prompt = "Workspaces",
 		on_choice = function(selected)
@@ -57,8 +68,8 @@ UI.open_workspace = function(options)
 		end,
 	}
 
-	options = vim.tbl_deep_extend("force", options, options or {})
-	local picker = UI.new_picker(options)
+	opts = vim.tbl_deep_extend("force", opts, options or {})
+	local picker = UI.new_picker(opts)
 
 	picker:render()
 end

@@ -49,7 +49,7 @@ Manager.BufferCaptureMethod = {
 ---@field exit_on_last_tab_close boolean
 Manager.options = {
 	buffer_capture_method = Manager.BufferCaptureMethod[Config.options.buffer_capture_method],
-	exit_on_last_tab_close = Config.options.exit_on_last_tab_close,
+	exit_on_workspace_close = Config.options.exit_on_workspace_close,
 }
 
 function Manager:init()
@@ -347,7 +347,7 @@ function Manager:workspace_close(workspace)
 					end
 				end
 			else
-				if self.options.exit_on_last_tab_close then
+				if self.options.exit_on_workspace_close then
 					vim.cmd("tabclose")
 				end
 			end

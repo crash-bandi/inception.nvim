@@ -1,3 +1,4 @@
+local log = require("inception.log").Logger
 local Manager = require("inception.manager")
 local Workspace = require("inception.workspace")
 
@@ -13,7 +14,7 @@ function api.create_new_workspace(name, dirs, opts)
 	local ok, ret = pcall(Manager.workspace_create, Manager, name, dirs, opts)
 
 	if not ok then
-		vim.notify(ret, vim.log.levels.ERROR)
+		log.error("Failed to create workspace: " .. ret)
 		return
 	end
 
@@ -38,13 +39,13 @@ function api.get_workspace(name)
 		if Manager.session.active_workspace then
 			return Manager.session.active_workspace
 		end
-		vim.notify("No workspace name provided.")
+		log.info("No workspace name provided.")
 		return
 	end
 
 	local ok, ret = pcall(Manager.get_workspace_by_name, Manager, name)
 	if not ok then
-		vim.notify("Workspace " .. name .. " not found.")
+		log.info("Workspace " .. name .. " not found.")
 	end
 
 	return ret and ret.id or nil
@@ -58,10 +59,10 @@ function api.open_workspace(wsid, mode)
 		local attachment_mode = mode and Workspace.ATTACHMENT_MODE[mode] or nil
 		local open_workspace, ret = pcall(Manager.workspace_open, Manager, workspace, attachment_mode)
 		if not open_workspace then
-			vim.notify(ret, vim.log.levels.ERROR)
+      log.error("Failed to open workspace '" .. workspace.id .. " (" .. workspace.name .. ")': " .. ret)
 		end
 	else
-		vim.notify(workspace, vim.log.levels.ERROR)
+    log.error("failed to get workspace " .. wsid .. ": " .. ret)
 	end
 end
 
@@ -70,19 +71,19 @@ function api.close_workspace(wsid)
 	wsid = wsid or Manager.session.active_workspace or nil
 
 	if not wsid then
-		vim.notify("No workspace id provided.")
+		log.info("No workspace id provided.")
 		return
 	end
 
 	local got_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
 	if not got_workspace then
-		vim.notify("Workspace " .. wsid .. " does not exist")
+		log.info("Workspace " .. wsid .. " does not exist")
 	end
 
 	local ok, ret = pcall(Manager.workspace_close, Manager, workspace)
 
 	if not ok then
-		vim.notify(ret, vim.log.levels.ERROR)
+		log.error("Failed to close workspace '" .. workspace.id .. " (" .. workspace.name .. ")': " .. ret)
 	end
 end
 
@@ -93,7 +94,7 @@ function api.attach_workspace(wsid, target_type, target_id)
 	local ok, ret = pcall(Manager.get_workspace, Manager, wsid)
 
 	if not ok then
-		vim.notify(ret, vim.log.levels.ERROR)
+		log.error("Failed to get workspace " .. wsid .. ": " .. ret)
 		return
 	end
 
@@ -103,23 +104,23 @@ function api.attach_workspace(wsid, target_type, target_id)
 	if target_type == "tab" then
 		target_id = target_id or vim.api.nvim_get_current_tabpage()
 		if not vim.api.nvim_tabpage_is_valid(target_id) then
-			vim.notify("Invalid target tabpage number: " .. target_id)
+			log.info("Invalid target tabpage number: " .. target_id)
 			return
 		end
 	elseif target_type == "win" then
 		target_id = target_id or vim.api.nvim_get_current_win()
 		if not vim.api.nvim_win_is_valid(target_id) then
-			vim.notify("Invalid target window number: " .. target_id)
+			log.info("Invalid target window number: " .. target_id)
 			return
 		end
 	else
-		vim.notify("Unsupported attachment target type: " .. target_type, vim.log.levels.ERROR)
+		log.error("Unsupported attachment target type: " .. target_type)
 	end
 
 	local ok2, ret2 = pcall(Manager.workspace_attach, Manager, wsid, target_type, target_id)
 
 	if not ok2 then
-		vim.notify(ret2, vim.log.levels.ERROR)
+		log.error("Failed to attached workspace " .. wsid .. ": " .. ret2)
 	end
 end
 
@@ -128,14 +129,14 @@ function api.detach_workspace(wsid)
 	wsid = wsid or Manager.session.active_workspace
 
 	if not wsid then
-		vim.notify("No workspace id provided.")
+		log.info("No workspace id provided.")
 		return
 	end
 
 	local ok, ret = pcall(Manager.workspace_detach, Manager, wsid)
 
 	if not ok then
-		vim.notify(ret, vim.log.levles.ERROR)
+		log.error("Failed to detach workspace " .. wsid .. ": " .. ret)
 	end
 end
 
@@ -144,15 +145,12 @@ function api.set_workspace(wsid)
 	local get_workspace, workspace = pcall(Manager.get_workspace, Manager, wsid)
 
 	if not get_workspace then
-		vim.notify(workspace, vim.log.levels.ERROR)
+		log.error("Failed to get workspace " .. wsid .. ": " .. workspace)
 		return
 	end
 
 	if not vim.tbl_contains(Manager.attached_workspaces, workspace.id) then
-		vim.notify(
-			"Workspace '" .. workspace.id .. " (" .. workspace.name .. ")' is not attached to anything.",
-			vim.log.levels.ERROR
-		)
+		log.error("Workspace '" .. workspace.id .. " (" .. workspace.name .. ")' is not attached to anything.")
 		return
 	end
 
@@ -160,7 +158,7 @@ function api.set_workspace(wsid)
 
 	if not focus_workspace then
 		error(err)
-		vim.notify(err, vim.log.levels.ERROR)
+		log.error("Failed to focus on workspace '" .. workspace.id .. " (" .. workspace.name .. ")': " .. err)
 	end
 end
 

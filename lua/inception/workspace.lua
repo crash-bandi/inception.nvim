@@ -201,10 +201,13 @@ end
 function Workspace:sync_cwd()
 	local attachment_mode = self:attachment_mode()
 	if attachment_mode == Workspace.ATTACHMENT_MODE.global then
+    log.debug("Settings global current working directory to: " .. self.current_working_directory.safe)
 		vim.api.nvim_set_current_dir(self.current_working_directory.safe)
 	elseif attachment_mode == Workspace.ATTACHMENT_MODE.tab then
+    log.debug("Settings tab current working directory to: " .. self.current_working_directory.safe)
 		vim.cmd("tcd " .. self.current_working_directory.safe)
 	elseif attachment_mode == Workspace.ATTACHMENT_MODE.window then
+    log.debug("Settings window current working directory to: " .. self.current_working_directory.safe)
 		vim.cmd("lcd " .. self.current_working_directory.safe)
 	end
 end

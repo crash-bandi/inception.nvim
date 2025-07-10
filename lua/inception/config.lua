@@ -1,6 +1,5 @@
 ---@class Inception.Config.Options
----@field exit_on_last_tab_close boolean
----@field log_action "print" | "notify" | "log" | "error"
+---@field exit_on_workspace_close boolean
 ---@field default_attachment_mode "global" | "tab" | "window"
 ---@field buffer_capture_method "listed" | "loaded" | "opened"
 
@@ -9,8 +8,7 @@
 ---@field log Inception.Log.Options
 local Config = {
 	options = {
-		exit_on_last_tab_close = false,
-		log_action = "print",
+		exit_on_workspace_close = false,
 		default_attachment_mode = "global",
 		buffer_capture_method = "loaded",
 	},
@@ -22,16 +20,26 @@ local Config = {
 
 ---@class Inception.User.Config
 ---@field options? Inception.User.Config.Options
+---@field log? Inception.User.Config.Log
 
 ---@class Inception.User.Config.Options
----@field exit_on_last_tab_close? boolean
+---@field exit_on_workspace_close? boolean
+---@field default_attachment_mode? "global"|"tab"|"window"
+---@field buffer_capture_method? "listed"|"loaded"|"active"
 
----@param config? Inception.User.Config
-function Config.load(config)
-	config = config or {}
+---@class Inception.User.Config.Log
+---@field level? "debug"|"info"|"warn"|"error"
+---@field output? "notify"|"print"
 
-	Config.options = vim.tbl_deep_extend("force", Config.options, config.options or {})
+---@param user_config? Inception.User.Config
+function Config.load(user_config)
+	user_config = user_config or {}
 
+	Config.options = vim.tbl_deep_extend("force", Config.options, user_config.options or {})
+  Config.options.default_attachment_mode = vim.fn.tolower(Config.options.default_attachment_mode)
+  Config.options.buffer_capture_method = vim.fn.tolower(Config.options.buffer_capture_method)
+
+  Config.log = vim.tbl_deep_extend("force", Config.log, user_config.log or {})
 	Config.log.level = vim.fn.toupper(Config.log.level)
   Config.log.output = vim.fn.tolower(Config.log.output)
 end
