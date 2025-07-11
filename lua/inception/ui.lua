@@ -1,7 +1,6 @@
 local log = require("inception.log").Logger
 local Api = require("inception.api")
-local Manager = require("inception.manager")
-local Workspace = require("inception.workspace")
+local workspace_state = require("inception.workspace").STATE
 
 ---@class Inception.PickerOptions
 ---@field finder any[] | fun():any[]
@@ -40,22 +39,31 @@ end
 
 ---@param options? Inception.PickerOptions
 UI.list_workspaces = function(options)
-	if #Manager.workspaces == 0 then
+	local workspaces = {}
+
+	for _, wsid in ipairs(Api.list_workspaces()) do
+		local ws = Api.get_workspace(wsid)
+		if ws then
+			table.insert(workspaces, ws)
+		end
+	end
+
+	if #workspaces == 0 then
 		log.info("No workspaces loaded")
 		return
 	end
 
 	local opts = {
-		finder = Manager.workspaces,
+		finder = workspaces,
 		formatter = function(item)
-      local state = nil
-      if item.state == Workspace.STATE.active then
-        state = ""
-      elseif item.state == Workspace.STATE.attached then
-        state = ""
-      elseif item.state == Workspace.STATE.loaded then
-        state = "󱥸"
-      end
+			local state = nil
+			if item.state == workspace_state.active then
+				state = ""
+			elseif item.state == workspace_state.attached then
+				state = ""
+			elseif item.state == workspace_state.loaded then
+				state = "󱥸"
+			end
 
 			return string.format("%s %-20s %s", state, item.name, item.id)
 		end,
